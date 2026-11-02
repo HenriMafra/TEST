@@ -1,20 +1,23 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V34 [SWORDBURST 2 APEX - UNIVERSAL MOB ENGINE]
+    👻 GHOST HUB V35 [SWORDBURST 2 APEX - BLUU & OUFGUS NATIVE CORE]
     ══════════════════════════════════════════════════════════════════════
-    Correções de Detecção e Combate Imediato:
-    ✔ Detecção Universal de Mobs (MeshPart, Part, Torso, Model):
-      - Suporta 100% dos monstros de Swordburst 2 (Snowgre, Icewhal, Snowman, etc.).
-      - Descarta apenas pastas especiais (Chests, Drops, Spawners) e corpos no void (Y < -40).
-    ✔ Varredura e Ataque Síncronos Imediatos:
-      - Trava no primeiro monstro no milissegundo de execução sem engasgos.
+    Construído transplantando DIRETAMENTE o motor funcional de Bluu e Oufguy:
+    ✔ Remote Oficial Real via Function:InvokeServer('RPCKey'):
+      - Obtém a chave dinâmica de RPC do servidor do Swordburst 2 (como no Bluu original).
+      - Envia o handshake binário com fallback oficial de Oufguy.
+    ✔ Movimento Matemático Exato do Bluu:
+      - Deslocamento relativo CFrame (+ Vector3.new) com LinearVelocity anti-gravidade.
+      - Posiciona 10 studs abaixo do mob (Zero Dano, 100% imune a golpes dos monstros).
+    ✔ Varredura Direta de Mobs (Workspace.Mobs & Bosses):
+      - Checagem nativa isDead(mob) idêntica à do Bluu (sem travas de altitude ou Y).
+      - Prioriza menor vida (Lowest HP) e desempate por proximidade.
+    ✔ Burst Agressivo de Skills (Oufguy massFire):
+      - Dispara todas as habilidades de espada sem delay e sem cliques de mouse.
     ✔ ZERO Cliques de Tela:
-      - 100% via código e rede (Combat Remote + Sword Skills Burst + TouchInterest).
-    ✔ Modo Subterrâneo Estável (-5.5 studs):
-      - Imune aos golpes terrestres dos mobs, sem Gimbal Lock, sem giro de câmera.
-    ✔ Auto Server Hop (Buscador de Servidor Vazio) + Reinício Automático (queue_on_teleport).
+      - 100% via código e rede (Combat Remote + TouchInterest na memória).
     ✔ Invisibilidade Completa: Avatar e Espadas (Workspace.CharacterItems).
-    ✔ Anti-Gravidade Absoluta (BodyVelocity 1e9) + Guardião Anti-Void (Resgate se Y < -35).
+    ✔ Auto Server Hop + queue_on_teleport (reinício automático entre servidores).
 ]]
 
 local Players = game:GetService("Players")
@@ -47,7 +50,7 @@ local function queueAutoRestart()
 end
 
 pcall(function()
-    LocalPlayer.OnTeleport:Connect(function(state)
+    LocalPlayer.OnTeleport:Connect(function()
         queueAutoRestart()
     end)
 end)
@@ -68,28 +71,22 @@ for _, name in ipairs({ "GhostHubApex", "GhostHubSB2", "GhostRadarGui" }) do
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V34)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V35)
 -- ====================================================================
 local Settings = {
     AutoFarm = true,          -- ATIVADO por padrão (caça e bate imediatamente!)
-    Underground = true,       -- Farma debaixo da terra (100% abaixo do piso)
-    FarmDepth = 5.5,          -- Profundidade segura abaixo do mob (studs)
+    FarmDepth = 10.0,         -- Profundidade abaixo do mob (studs - Zero Dano)
     Invisibility = true,      -- Personagem E ESPADAS transparentes/invisíveis
     Desync = true,            -- Desync de animações (estilo Bluu)
     AutoServerHop = false,    -- Pula automaticamente para servidor vazio se alguém entrar
     SoloOnly = false,         -- Pausa se houver outro jogador no servidor atual
-    KillAura = true,          -- Kill Aura multialvo
-    MapWideAura = true,       -- Alcance do Kill Aura cobre o mapa inteiro
-    AuraRange = 5000,         -- Raio em studs
-    MaxMultiTargets = 30,     -- Quantidade máxima de mobs atacados simultaneamente por ciclo
+    KillAura = true,          -- Kill Aura multialvo no mapa inteiro
     SwordSkills = true,       -- Uso de habilidades nativas de espada (burst Oufguy)
     InfStamina = true,        -- 100% de estâmina ininterrupta
     NoClip = true,            -- Atravessa chão, paredes e pedras
     AutoDungeon = true,       -- Inicia masmorras automaticamente
 
-    FlySpeed = 340,           -- Velocidade máxima de deslocamento CFrame (studs/s)
-    AttackCooldown = 0.10,    -- Frequência de ataque ultra-rápida (10 ataques por segundo)
-    SkillCooldown = 0.8,      -- Intervalo de habilidades especiais em burst
+    FlySpeed = 450,           -- Velocidade máxima Bluu (studs/s)
 }
 
 local Stats = {
@@ -101,6 +98,18 @@ local Stats = {
 -- Remotes Oficiais do Swordburst 2
 local Event = ReplicatedStorage:WaitForChild("Event")
 local Function = ReplicatedStorage:WaitForChild("Function")
+
+-- Obtém a Chave Dinâmica de RPC do Servidor (Método Nativo do Bluu)
+local RPCKey
+local function updateRPCKey()
+    pcall(function()
+        RPCKey = Function:InvokeServer("RPCKey", {})
+    end)
+    if not RPCKey or type(RPCKey) ~= "table" then
+        RPCKey = { "\204", "\214", "\177", "\251" }
+    end
+end
+updateRPCKey()
 
 -- Habilidades de Espada Oficiais
 local SwordSkillsList = {
@@ -185,7 +194,7 @@ Players.PlayerAdded:Connect(function(newPlayer)
 end)
 
 -- ====================================================================
--- 🗡️ GERENCIADOR DE LÂMINAS & HITBOX (CHARACTER ITEMS)
+-- 🗡️ GERENCIADOR DE LÂMINAS & HITBOX (CHARACTER ITEMS - ESTILO BLUU)
 -- ====================================================================
 local myBlades = {}
 
@@ -195,14 +204,10 @@ local function scanMyBlades()
     if charItems then
         local userFolder = charItems:FindFirstChild(tostring(LocalPlayer.UserId))
         if userFolder then
-            for _, weapon in ipairs(userFolder:GetChildren()) do
-                if weapon.Name == "RightWeapon" or weapon.Name == "LeftWeapon" then
-                    local tool = weapon:FindFirstChild("Tool") or weapon:FindFirstChildOfClass("Model") or weapon
-                    local blade = tool and (tool:FindFirstChild("Blade") or tool:FindFirstChild("Handle") or tool:FindFirstChildOfClass("BasePart"))
-                    if blade and blade:IsA("BasePart") then
-                        blade.CanTouch = true
-                        table.insert(myBlades, blade)
-                    end
+            for _, desc in ipairs(userFolder:GetDescendants()) do
+                if desc:IsA("BasePart") then
+                    pcall(function() desc.CanTouch = true end)
+                    table.insert(myBlades, desc)
                 end
             end
         end
@@ -212,7 +217,7 @@ local function scanMyBlades()
     if char then
         for _, p in ipairs(char:GetDescendants()) do
             if p:IsA("BasePart") and (p.Name:lower():find("blade") or p.Name:lower():find("sword") or p.Name == "RightGrip") then
-                p.CanTouch = true
+                pcall(function() p.CanTouch = true end)
                 table.insert(myBlades, p)
             end
         end
@@ -220,12 +225,12 @@ local function scanMyBlades()
 end
 
 -- ====================================================================
--- 💀 DETECÇÃO E VALIDAÇÃO UNIVERSAL DE MOBS DO SWORDBURST 2
+-- 💀 DETECÇÃO E FILTRAGEM NATIVA DE MOBS (ESTILO EXATO DO BLUU)
 -- ====================================================================
 local function getMobRoot(mob)
     if not mob or not mob:IsA("Model") then return nil end
-    return mob.PrimaryPart
-        or mob:FindFirstChild("HumanoidRootPart")
+    return mob:FindFirstChild("HumanoidRootPart")
+        or mob.PrimaryPart
         or mob:FindFirstChild("Torso")
         or mob:FindFirstChild("UpperTorso")
         or mob:FindFirstChild("Head")
@@ -233,51 +238,26 @@ local function getMobRoot(mob)
         or mob:FindFirstChildOfClass("BasePart")
 end
 
-local function isMob(m)
-    if not m or not m:IsA("Model") or not m.Parent then return false end
-    if Players:GetPlayerFromCharacter(m) then return false end
-
-    -- Descarta pastas ou objetos especiais que não são monstros
-    local name = m.Name:lower()
+local function isDead(mob)
+    if not mob or not mob.Parent then return true end
+    local name = mob.Name:lower()
     if name == "chests" or name == "chest" or name == "drops" or name == "spawners" or name == "portal" then
-        return false
+        return true
     end
 
-    return true
-end
-
-local function isMobAlive(m)
-    if not isMob(m) then return false end
-
-    local root = getMobRoot(m)
-    if not root then return false end
-
-    -- Descarta corpos que caíram no void
-    local pos = root.Position
-    if pos.Y < -40 or pos.Y > 2500 or pos.Magnitude > 15000 then return false end
-
-    -- Checagem de vida oficial via Entity.Health
-    local entity = m:FindFirstChild("Entity")
-    if entity then
-        local health = entity:FindFirstChild("Health")
-        if health and health:IsA("ValueBase") then
-            local minVal = health.MinValue or 0
-            if health.Value <= minVal then return false end
-        end
-
-        local hitLives = entity:FindFirstChild("HitLives")
-        if hitLives and hitLives:IsA("ValueBase") and hitLives.Value <= 0 then
-            return false
+    local entity = mob:FindFirstChild("Entity")
+    if entity and entity:FindFirstChild("Health") and entity.Health:IsA("ValueBase") then
+        if entity.Health.Value <= (entity.Health.MinValue or 0) then
+            return true
         end
     end
 
-    -- Checagem via Humanoid clássico
-    local hum = m:FindFirstChildOfClass("Humanoid")
+    local hum = mob:FindFirstChildOfClass("Humanoid")
     if hum and hum.Health <= 0 then
-        return false
+        return true
     end
 
-    return true
+    return false
 end
 
 local function getNumericHP(m)
@@ -295,112 +275,116 @@ local function getNumericHP(m)
     return 100
 end
 
-local TargetCache = {}
-
-local function scanTargets()
+local function getClosestTarget()
     local char = LocalPlayer.Character
-    if not char then return end
-    local myPos = char:GetPivot().Position
+    if not char then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+    if not root then return nil end
+    local myPos = root.Position
 
-    local list = {}
-    local mobsFolder = Workspace:FindFirstChild("Mobs")
-    local bossesFolder = Workspace:FindFirstChild("Bosses")
+    local Mobs = Workspace:FindFirstChild("Mobs")
+    local Bosses = Workspace:FindFirstChild("Bosses")
 
-    local function checkMob(m)
-        pcall(function()
-            if not isMobAlive(m) then return end
+    local bestTarget = nil
+    local minHP = math.huge
+    local minDist = math.huge
 
-            local root = getMobRoot(m)
-            if not root then return end
+    local function check(mob)
+        if not mob or isDead(mob) then return end
+        if Players:GetPlayerFromCharacter(mob) then return end
 
-            local rootPos = root.Position
-            local dist = (myPos - rootPos).Magnitude
-            local hp = getNumericHP(m)
+        local mRoot = getMobRoot(mob)
+        if not mRoot then return end
 
-            table.insert(list, {
-                Model = m,
-                Name = m.Name,
-                Root = root,
-                Pos = rootPos,
-                Dist = dist,
-                HP = hp,
-                HPText = string.format("%d HP", math.floor(hp)),
-            })
-        end)
-    end
+        local dist = (mRoot.Position - myPos).Magnitude
+        local hp = getNumericHP(mob)
 
-    if mobsFolder then
-        for _, m in ipairs(mobsFolder:GetChildren()) do checkMob(m) end
-    end
-    if bossesFolder then
-        for _, b in ipairs(bossesFolder:GetChildren()) do checkMob(b) end
-    end
-
-    -- 🎯 Prioridade: Menor vida primeiro. Empate: Mais perto primeiro!
-    table.sort(list, function(a, b)
-        if math.abs(a.HP - b.HP) > 0.05 then
-            return a.HP < b.HP
-        else
-            return a.Dist < b.Dist
+        -- Prioridade de menor vida; se igual, o mais próximo
+        if hp < minHP or (math.abs(hp - minHP) < 1 and dist < minDist) then
+            minHP = hp
+            minDist = dist
+            bestTarget = mob
         end
-    end)
-    TargetCache = list
+    end
+
+    if Mobs then
+        for _, m in ipairs(Mobs:GetChildren()) do check(m) end
+    end
+    if Bosses then
+        for _, b in ipairs(Bosses:GetChildren()) do check(b) end
+    end
+
+    return bestTarget
 end
 
 -- ====================================================================
--- ⚡ MOTOR DE ATAQUE EXTREMO (100% CÓDIGO DIRETO / ZERO CLIQUES DE TELA)
+-- ⚡ COMBATE NATIVO (BLUU dealDamage + OUFGUS massFire + REQUIRED SERVICES)
 -- ====================================================================
-local lastAttackTick = 0
-local lastSkillTick = 0
-
-local function executeApexAttack(targetMob)
-    if not targetMob or not isMobAlive(targetMob.Model) then return end
-    local mobModel = targetMob.Model
-    local mobRoot = targetMob.Root
-    if not mobModel or not mobRoot then return end
-
-    -- 1. Ataque Básico Oficial (Pure Packet)
-    pcall(function()
-        Event:FireServer(
-            "Combat",
-            { "\204", "\214", "\177", "\251" },
-            {
-                "Attack",
-                nil,
-                mobModel,
-                genKey()
-            }
-        )
-    end)
-
-    -- 2. Burst Agressivo de Sword Skills (Estilo Oufguy massFire)
-    if Settings.SwordSkills and (os.clock() - lastSkillTick >= Settings.SkillCooldown) then
-        for _, skillName in ipairs(SwordSkillsList) do
-            if not isMobAlive(mobModel) then break end
-            pcall(function()
-                Event:FireServer("Skills", { "UseSkill", skillName, { Direction = Vector3.new(0, 0, 0) } })
-                Event:FireServer(
-                    "Combat",
-                    { "\204", "\214", "\177", "\251" },
-                    {
-                        "Attack",
-                        skillName,
-                        mobModel,
-                        genKey()
-                    }
-                )
-            end)
+local RequiredServices = (function()
+    for _, func in next, { getgc, getreg } do
+        if type(func) == "function" then
+            local ok, list = pcall(func, true)
+            if ok and type(list) == "table" then
+                for _, object in next, list do
+                    if type(object) == "table" then
+                        local Services = rawget(object, "Services")
+                        if Services and rawget(Services, "Combat") then
+                            return Services
+                        end
+                    end
+                end
+            end
         end
-        lastSkillTick = os.clock()
+    end
+    for _, func in next, { getloadedmodules, getnilinstances } do
+        if type(func) == "function" then
+            local ok, list = pcall(func)
+            if ok and type(list) == "table" then
+                for _, instance in next, list do
+                    if instance.Name == "MainModule" and instance:FindFirstChild("Services") then
+                        local req = require or (getrenv and getrenv().require)
+                        if req then
+                            local okReq, res = pcall(req, instance)
+                            if okReq and res and res.Services then
+                                return res.Services
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end)()
+
+local function dealDamage(target, skillName)
+    if not target or isDead(target) then return end
+    local mRoot = getMobRoot(target)
+
+    -- Protocolo 1: Internal Game Combat Service (quando suportado pelo executor)
+    if RequiredServices and RequiredServices.Combat and RequiredServices.Combat.DealDamage then
+        pcall(function()
+            RequiredServices.Combat.DealDamage(target, skillName)
+        end)
     end
 
-    -- 3. TouchInterest Instantâneo nas Lâminas (Dano Físico Real Direto na Memória)
-    if firetouchinterest and mobRoot then
+    -- Protocolo 2: Protocolo Bluu oficial (RPCKey dinâmico)
+    pcall(function()
+        Event:FireServer('Combat', RPCKey, { 'Attack', target, skillName, '2' })
+    end)
+
+    -- Protocolo 3: Protocolo Oufguy oficial (massFire)
+    pcall(function()
+        Event:FireServer('Combat', RPCKey, { 'Attack', skillName, target, genKey() })
+    end)
+
+    -- Protocolo 4: TouchInterest Instantâneo nas Lâminas
+    if firetouchinterest and mRoot and #myBlades > 0 then
         for _, blade in ipairs(myBlades) do
             if blade and blade.Parent then
                 pcall(function()
-                    firetouchinterest(blade, mobRoot, 0)
-                    firetouchinterest(blade, mobRoot, 1)
+                    firetouchinterest(blade, mRoot, 0)
+                    firetouchinterest(blade, mRoot, 1)
                 end)
             end
         end
@@ -408,7 +392,7 @@ local function executeApexAttack(targetMob)
 end
 
 -- ====================================================================
--- 📱 INTERFACE MOBILE HUD APEX V34 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
+-- 📱 INTERFACE MOBILE HUD APEX V35 (TOUCH ULTRA-RESPONSIVO)
 -- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GhostHubApex"
@@ -457,7 +441,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST APEX V34 • UNIVERSAL GOD"
+Title.Text = "👻 GHOST APEX V35 • BLUU & OUFGUS ENGINE"
 Title.TextColor3 = Color3.fromRGB(0, 255, 185)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 10.5
@@ -534,9 +518,9 @@ StatusText.Font = Enum.Font.GothamMedium
 StatusText.TextSize = 9.5
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.TextWrapped = true
-StatusText.Text = "🎯 Localizando monstros vivos no mapa..."
+StatusText.Text = "🎯 Caçando monstros no mapa..."
 
--- Lista de Opções Rolável (Com AutomaticCanvasSize para suportar todos os botões)
+-- Lista de Opções Rolável (Com AutomaticCanvasSize)
 local ControlsScroll = Instance.new("ScrollingFrame", Main)
 ControlsScroll.Size = UDim2.new(1, -20, 1, -166)
 ControlsScroll.Position = UDim2.new(0, 10, 0, 160)
@@ -636,22 +620,21 @@ local function createToggle(name, initialVal, callback)
 end
 
 -- Toggles Solicitados
-createToggle("🕳️ MODO SUBTERRÂNEO (ABAIXO DO CHÃO)", Settings.Underground, function(v) Settings.Underground = v end)
-createToggle("👻 INVISIBILIDADE (AVATAR & ESPADAS)", Settings.Invisibility, function(v) Settings.Invisibility = v end)
-createToggle("💥 KILL AURA (MAPA INTEIRO)", Settings.KillAura, function(v) Settings.KillAura = v end)
+createToggle("💥 KILL AURA MULTIALVO", Settings.KillAura, function(v) Settings.KillAura = v end)
 createToggle("🗡️ BURST DE SWORD SKILLS", Settings.SwordSkills, function(v) Settings.SwordSkills = v end)
+createToggle("👻 INVISIBILIDADE (AVATAR & ESPADAS)", Settings.Invisibility, function(v) Settings.Invisibility = v end)
 createToggle("🏃 ESTÂMINA INFINITA (100%)", Settings.InfStamina, function(v) Settings.InfStamina = v end)
 createToggle("🌐 AUTO SERVER HOP (QUANDO ENTRAR GENTE)", Settings.AutoServerHop, function(v) Settings.AutoServerHop = v end)
 createToggle("🛡️ FARM APENAS SOZINHO (SOLO)", Settings.SoloOnly, function(v) Settings.SoloOnly = v end)
 createToggle("👻 NOCLIP (PAREDES/CHÃO)", Settings.NoClip, function(v) Settings.NoClip = v end)
 createToggle("🏰 AUTO-INICIAR DUNGEONS", Settings.AutoDungeon, function(v) Settings.AutoDungeon = v end)
 
--- Botão Flutuante (Arrastável e com clique confiável via .Activated)
+-- Botão Flutuante (Arrastável)
 local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "👻 APEX V34"
+FloatBtn.Text = "👻 APEX V35"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -669,7 +652,7 @@ FloatBtn.Activated:Connect(toggleGuiVisibility)
 FloatBtn.MouseButton1Click:Connect(toggleGuiVisibility)
 
 -- ====================================================================
--- 🔄 LOOPS DE SUPORTE (INVISIBILIDADE COMPLETA, NOCLIP, ESTÂMINA)
+-- 🔄 LOOPS DE SUPORTE (INVISIBILIDADE, NOCLIP, ESTÂMINA, ANTI-GRAVIDADE)
 -- ====================================================================
 
 -- Anti-AFK
@@ -693,21 +676,23 @@ local function applyDesync()
         local char = LocalPlayer.Character
         if char then
             local animate = char:FindFirstChild("Animate")
-            if animate then
-                animate.Parent = nil
-            end
+            if animate then animate.Parent = nil end
         end
     end
 end
-LocalPlayer.CharacterAdded:Connect(applyDesync)
+LocalPlayer.CharacterAdded:Connect(function()
+    applyDesync()
+    task.wait(0.5)
+    scanMyBlades()
+end)
 applyDesync()
 
--- Invisibilidade Total (Avatar + Espadas no CharacterItems), NoClip & Estâmina no Stepped
+-- NoClip, Estâmina e Invisibilidade no Stepped
 RunService.Stepped:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
 
-    -- Estâmina Infinita (Bluu & Oufguy Method)
+    -- Estâmina Infinita (Bluu & Oufguy)
     if Settings.InfStamina then
         local entity = char:FindFirstChild("Entity")
         if entity and entity:FindFirstChild("Stamina") then
@@ -716,10 +701,10 @@ RunService.Stepped:Connect(function()
         pcall(function() Event:FireServer("Actions", { "Sprint", "Disabled" }) end)
     end
 
-    -- NoClip: Apenas se AutoFarm estiver ATIVO e caçando!
+    -- NoClip: Apenas se AutoFarm estiver ATIVO
     if Settings.NoClip and Settings.AutoFarm then
         for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") and p.CanCollide then
+            if p:IsA("BasePart") then
                 p.CanCollide = false
             end
         end
@@ -761,27 +746,36 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Varredura inicial IMEDIATA síncrona
+-- Varredura inicial síncrona
 scanMyBlades()
-scanTargets()
 
 -- ====================================================================
--- 🚀 MOTOR PRINCIPAL EM HEARTBEAT (UNDERGROUND GLIDE & MULTI-AURA)
+-- 🚀 MOTOR PRINCIPAL DE AUTOFARM (LÓGICA EXATA DO BLUU)
 -- ====================================================================
-local lastScanTick = 0
-local lastBladesTick = 0
+task.spawn(function()
+    while true do
+        local deltaTime = task.wait()
 
-RunService.Heartbeat:Connect(function(dt)
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
-    if not root then return end
+        if not Settings.AutoFarm then
+            StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão verde acima para iniciar a caçada!"
+            local c = LocalPlayer.Character
+            if c then
+                local r = c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("Torso")
+                if r then
+                    local bv = r:FindFirstChild("ApexAntiGrav")
+                    if bv then bv:Destroy() end
+                end
+            end
+            continue
+        end
 
-    local now = os.clock()
+        local char = LocalPlayer.Character
+        if not char then continue end
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+        if not root then continue end
 
-    -- 🛡️ ANTI-GRAVIDADE ABSOLUTA: Trava o boneco no ar ou terra impedindo queda no void
-    local bv = root:FindFirstChild("ApexAntiGrav")
-    if Settings.AutoFarm then
+        -- Anti-Gravidade ativa
+        local bv = root:FindFirstChild("ApexAntiGrav")
         if not bv then
             bv = Instance.new("BodyVelocity")
             bv.Name = "ApexAntiGrav"
@@ -789,145 +783,125 @@ RunService.Heartbeat:Connect(function(dt)
             bv.Velocity = Vector3.zero
             bv.Parent = root
         end
-    else
-        if bv then bv:Destroy() end
-    end
 
-    -- Varredura rápida de Mobs a cada 0.2s (ou imediata se a lista estiver vazia)
-    if #TargetCache == 0 or (now - lastScanTick) >= 0.20 then
-        scanTargets()
-        lastScanTick = now
-    end
-
-    -- Atualiza lâminas ativas a cada 1.5s
-    if (now - lastBladesTick) >= 1.5 then
-        scanMyBlades()
-        lastBladesTick = now
-    end
-
-    -- 🌐 AUTO SERVER HOP: Se configurado e outro jogador estiver no servidor, pula
-    local otherPlayers = #Players:GetPlayers() - 1
-    if Settings.AutoServerHop and otherPlayers > 0 and not isHopping then
-        StatusText.Text = string.format("🌐 %d jogador(es) no servidor! Pulando para servidor vazio...", otherPlayers)
-        hopToEmptyServer(StatusText)
-        root.AssemblyLinearVelocity = Vector3.zero
-        return
-    end
-
-    -- 🛡️ CHECAGEM SOLO-ONLY: Se houver outro jogador no servidor E a opção estiver ativa, pausa
-    if Settings.SoloOnly and otherPlayers > 0 then
-        StatusText.Text = string.format(
-            "🛡️ MODO SEGURO: %d outros jogadores no servidor!\n⏸️ Farm pausado por segurança.",
-            otherPlayers
-        )
-        root.AssemblyLinearVelocity = Vector3.zero
-        return
-    end
-
-    -- ⏸️ PAUSA DO AUTO-FARM
-    if not Settings.AutoFarm then
-        StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão verde acima para iniciar a caçada!"
-        root.AssemblyLinearVelocity = Vector3.zero
-        return
-    end
-
-    -- 🚨 GUARDIÃO ANTI-VOID: Se por algum motivo o boneco cair no void, resgata na hora!
-    local myPos = char:GetPivot().Position
-    if myPos.Y < -35 or myPos.Y > 3000 then
-        local safeTarget = TargetCache[1]
-        if safeTarget and isMobAlive(safeTarget.Model) then
-            root.CFrame = CFrame.new(safeTarget.Pos.X, safeTarget.Pos.Y - Settings.FarmDepth, safeTarget.Pos.Z)
-        else
-            local spawn = Workspace:FindFirstChild("SpawnLocation", true) or Workspace:FindFirstChild("Spawn", true)
-            if spawn then
-                root.CFrame = CFrame.new(spawn.Position + Vector3.new(0, 4, 0))
-            else
-                root.CFrame = CFrame.new(0, 15, 0)
-            end
+        -- Checagem Solo-Only
+        local otherPlayers = #Players:GetPlayers() - 1
+        if Settings.SoloOnly and otherPlayers > 0 then
+            StatusText.Text = string.format("🛡️ MODO SEGURO: %d outro(s) jogador(es) no servidor!\n⏸️ Farm pausado por segurança.", otherPlayers)
+            root.AssemblyLinearVelocity = Vector3.zero
+            continue
         end
-        root.AssemblyLinearVelocity = Vector3.zero
-        return
-    end
 
-    local currentTarget = TargetCache[1]
+        -- Checagem Auto Server Hop
+        if Settings.AutoServerHop and otherPlayers > 0 and not isHopping then
+            StatusText.Text = string.format("🌐 %d jogador(es) no servidor! Pulando para servidor vazio...", otherPlayers)
+            hopToEmptyServer(StatusText)
+            root.AssemblyLinearVelocity = Vector3.zero
+            continue
+        end
 
-    if currentTarget and isMobAlive(currentTarget.Model) then
-        local tRoot = currentTarget.Root or getMobRoot(currentTarget.Model)
-        if not tRoot then return end
-        local tPos = tRoot.Position
+        -- Busca o monstro com menor vida
+        local target = getClosestTarget()
+        if not target or isDead(target) then
+            StatusText.Text = "🔍 Procurando próximo monstro vivo com menor vida..."
+            root.AssemblyLinearVelocity = Vector3.zero
+            continue
+        end
 
-        -- 🕳️ POSICIONAMENTO ESTÁVEL SEM GIRO:
-        -- Fica exatamente 5.5 studs abaixo do mob (debaixo da terra, imune aos golpes terrestres do mob)
-        local targetGoalPos = Vector3.new(tPos.X, tPos.Y - Settings.FarmDepth, tPos.Z)
-        local diff = targetGoalPos - myPos
-        local dist = diff.Magnitude
+        local mobRoot = getMobRoot(target)
+        if not mobRoot then continue end
 
-        local elapsed = math.floor(now - Stats.StartTime)
-        local mins = math.floor(elapsed / 60)
-        local secs = elapsed % 60
+        -- 🕳️ Posicionamento seguro 10 studs abaixo do mob (Estilo Bluu)
+        local targetPos = mobRoot.Position + Vector3.new(0, -Settings.FarmDepth, 0)
+        local myPos = root.Position
+        local toTarget = targetPos - myPos
+        local totalDist = toTarget.Magnitude
 
+        local hpNum = getNumericHP(target)
         StatusText.Text = string.format(
-            "🎯 Alvo Menor Vida: %s (%s)\n📏 Dist: %.1f studs | ⏱️ %02d:%02d | ⚔️ Abatidos: %d\n🛡️ Modo: Subterrâneo (-%.1f studs) | 👥 Servidor: %s\n🗡️ Lâminas: %d | ⚡ Estâmina: 100%%",
-            currentTarget.Name,
-            currentTarget.HPText,
-            dist,
-            mins, secs,
+            "🎯 Alvo Menor Vida: %s (%d HP)\n📏 Dist: %.1f studs | ⚔️ Abatidos: %d\n🛡️ Modo: Zero Dano Subterrâneo (-%.1f studs)\n👥 Servidor: %s | 🗡️ Lâminas: %d",
+            target.Name,
+            math.floor(hpNum),
+            totalDist,
             Stats.MobsSlain,
             Settings.FarmDepth,
             otherPlayers == 0 and "SOLO (Vazio)" or string.format("%d Players", otherPlayers + 1),
             #myBlades
         )
 
-        -- ⚡ DESLOCAMENTO CFrame ULTRA-RÁPIDO SEM GIMBAL LOCK (Zero giros de tela)
-        if dist > 80 then
-            root.CFrame = CFrame.new(targetGoalPos)
-            root.AssemblyLinearVelocity = Vector3.zero
-        elseif dist > 1.0 then
-            local moveDir = diff.Unit
-            local step = math.min(dist, Settings.FlySpeed * dt)
-            local newPos = myPos + (moveDir * step)
-
-            root.CFrame = CFrame.new(newPos)
-            root.AssemblyLinearVelocity = Vector3.zero
-        else
-            root.CFrame = CFrame.new(targetGoalPos)
-            root.AssemblyLinearVelocity = Vector3.zero
-        end
-
-        -- ZERO SEQUESTRO DE CÂMERA: A câmera é 100% livre!
-
-        -- 💥 ATAQUE SINCRONIZADO APEX (KILL AURA GLOBAL NO MAPA INTEIRO - 100% CÓDIGO)
-        if (now - lastAttackTick >= Settings.AttackCooldown) then
-            if Settings.KillAura then
-                local multiCount = 0
-                for _, mob in ipairs(TargetCache) do
-                    if isMobAlive(mob.Model) then
-                        executeApexAttack(mob)
-                        multiCount = multiCount + 1
-                        if multiCount >= Settings.MaxMultiTargets then break end
-                    end
-                end
-            else
-                executeApexAttack(currentTarget)
+        -- ⚡ Movimento CFrame Relativo Exato do Bluu
+        if totalDist > 0.5 then
+            root.CFrame += Vector3.new(0, toTarget.Y, 0)
+            local horiz = Vector3.new(toTarget.X, 0, toTarget.Z)
+            if horiz.Magnitude > 0 then
+                local moveDir = horiz.Unit
+                local alpha = math.clamp(deltaTime * Settings.FlySpeed / horiz.Magnitude, 0, 1)
+                root.CFrame += moveDir * horiz.Magnitude * alpha
             end
-            lastAttackTick = now
+            root.AssemblyLinearVelocity = Vector3.zero
         end
-    else
-        -- Mob eliminado ou inválido: avança na lista
-        if currentTarget then
+
+        -- 💥 Ataque contínuo ao alvo
+        dealDamage(target, nil)
+
+        -- 🗡️ Burst de Skills se ativado
+        if Settings.SwordSkills then
+            for _, sk in ipairs(SwordSkillsList) do
+                if isDead(target) then break end
+                pcall(function()
+                    Event:FireServer('Skills', { 'UseSkill', sk, { Direction = Vector3.zero } })
+                end)
+                dealDamage(target, sk)
+            end
+        end
+
+        -- Avança estatística quando o mob morre
+        if isDead(target) then
             Stats.MobsSlain = Stats.MobsSlain + 1
-            table.remove(TargetCache, 1)
         end
-        StatusText.Text = "🔍 Procurando próximo monstro vivo com menor vida..."
-        if root then root.AssemblyLinearVelocity = Vector3.zero end
+    end
+end)
+
+-- ====================================================================
+-- 💥 LOOP INDEPENDENTE DE KILL AURA (ESTILO EXATO DO BLUU)
+-- ====================================================================
+task.spawn(function()
+    while true do
+        task.wait(0.08)
+
+        if not Settings.KillAura then continue end
+
+        local Mobs = Workspace:FindFirstChild("Mobs")
+        local Bosses = Workspace:FindFirstChild("Bosses")
+
+        local function attackFolder(folder)
+            if not folder then return end
+            for _, mob in ipairs(folder:GetChildren()) do
+                if not isDead(mob) then
+                    dealDamage(mob, nil)
+                end
+            end
+        end
+
+        attackFolder(Mobs)
+        attackFolder(Bosses)
+    end
+end)
+
+-- Atualização periódica de lâminas e chaves
+task.spawn(function()
+    while true do
+        task.wait(2)
+        scanMyBlades()
+        updateRPCKey()
     end
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V34 UNIVERSAL GOD] CARREGADO COM SUCESSO!")
-print("   • Motor Universal de Mobs: 100% dos monstros detectados")
-print("   • Varredura Imediata: Sem atraso na caçada")
-print("   • Zero Giro de Câmera & Zero Cliques de Mouse")
-print("   • Guardião Anti-Void: ATIVO")
+print("👻 [GHOST HUB V35 BLUU & OUFGUS ENGINE] CARREGADO COM SUCESSO!")
+print("   • Motor de Movimento: Código Matemático Nativo do Bluu")
+print("   • Combate: RPCKey Dinâmico + dealDamage Nativo")
+print("   • Kill Aura Loop Independente: ATIVO")
+print("   • Zero Cliques de Mouse / Zero Giro de Câmera")
 print("   • Auto Server Hop + queue_on_teleport: ATIVO")
 print("═════════════════════════════════════════════════════════════")
