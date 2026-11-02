@@ -1,17 +1,18 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V28 [SWORDBURST 2 APEX - UNDERGROUND & STEALTH GOD]
+    👻 GHOST HUB V29 [SWORDBURST 2 APEX - ZERO GRAVITY & STEALTH GOD]
     ══════════════════════════════════════════════════════════════════════
-    Novas funcionalidades extremas adicionadas conforme solicitado:
-    ✔ Modo Subterrâneo: Farma debaixo da terra (invisível e imune a mobs).
-    ✔ Invisibilidade Total: Avatar 100% invisível contra jogadores e tela.
-    ✔ Modo Seguro Solo-Only: Pausa IMEDIATAMENTE se houver outro jogador.
-    ✔ Kill Aura Multialvo à Distância: Ataca até 14 mobs simultâneos no mapa.
-    ✔ Prioridade por Menor Vida: Foca no mob com menos vida primeiro; se empatar, no mais próximo.
-    ✔ Velocidade Extrema CFrame: 280 studs/s atravessando o solo sem atrito.
-    ✔ Controles Touch/Mobile 100% Funcionais: Botão Master e Toggles corrigidos (.Activated + debounce).
-    ✔ Inicia Desativado por padrão: Usuário escolhe a hora exata de ligar/desligar.
-    ✔ Zero Webhooks / Zero Bloat / 100% Waydroid & PC.
+    Correções de Estabilidade e Anti-Queda:
+    ✔ Anti-Gravidade Absoluta: BodyVelocity (1e9 força) impede qualquer queda no void.
+    ✔ Resgate Instantâneo Anti-Void: Se o boneco estiver longe/no void, teleporta direto para o mob.
+    ✔ Auto-Farm ATIVO por padrão: Começa a caçar e bater imediatamente ao executar.
+    ✔ Solo-Only Opcional (Padrão: Desligado): Não congela em servidores com outros players.
+    ✔ NoClip Inteligente: Colisão reativada quando o farm é pausado (não afunda no chão).
+    ✔ Modo Subterrâneo Perfeito: -4.2 studs abaixo do mob (alcance das lâminas + invisível da superfície).
+    ✔ Kill Aura Multialvo à Distância: Ataca até 14 monstros simultâneos no mapa inteiro.
+    ✔ Prioridade Menor Vida: Caça o mob com menos vida primeiro; desempate por proximidade.
+    ✔ Velocidade Extrema CFrame: 280 studs/s atravessando rochas e chão.
+    ✔ Botão Master & Toggles Touch (.Activated + debounce) 100% funcionais no Waydroid.
 ]]
 
 local Players = game:GetService("Players")
@@ -41,15 +42,15 @@ for _, name in ipairs({ "GhostHubApex", "GhostHubSB2", "GhostRadarGui" }) do
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V28 STEALTH SETTINGS)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V29)
 -- ====================================================================
 local Settings = {
-    AutoFarm = false,         -- Inicia DESLIGADO por padrão (controle total)
-    Underground = true,       -- Farma debaixo da terra (escondido da superfície)
-    FarmDepth = 6.2,          -- Profundidade abaixo do mob (studs)
-    FarmHeight = 4.2,         -- Altura caso o modo aéreo seja selecionado
+    AutoFarm = true,          -- ATIVADO por padrão (caça e bate imediatamente!)
+    Underground = true,       -- Farma debaixo da terra (invisível na superfície)
+    FarmDepth = 4.2,          -- Profundidade segura abaixo do mob (studs)
+    FarmHeight = 4.2,         -- Altura caso o modo aéreo seja ativado
     Invisibility = true,      -- Personagem transparente/invisível
-    SoloOnly = true,          -- Pausa se houver outro jogador no servidor
+    SoloOnly = false,         -- Desligado por padrão para funcionar em servers públicos
     KillAura = true,          -- Kill Aura multialvo
     MapWideAura = true,       -- Alcance do Kill Aura cobre o mapa inteiro
     AuraRange = 5000,         -- Raio em studs
@@ -61,8 +62,8 @@ local Settings = {
     MobESP = true,            -- Destaque visual dos monstros
 
     FlySpeed = 280,           -- Velocidade máxima de deslocamento (studs/s)
-    AttackCooldown = 0.15,    -- Intervalo máximo de ataque
-    SkillCooldown = 1.1,      -- Intervalo de habilidades especiais
+    AttackCooldown = 0.14,    -- Intervalo máximo de ataque
+    SkillCooldown = 1.0,      -- Intervalo de habilidades especiais
 }
 
 local Stats = {
@@ -238,6 +239,7 @@ local function executeApexAttack(targetMob)
     if not targetMob or isMobDead(targetMob.Model) then return end
     local mobModel = targetMob.Model
     local mobRoot = targetMob.Root
+    if not mobModel or not mobRoot then return end
 
     -- 1. Disparo do Remote Oficial do Swordburst 2 (Combat Attack)
     pcall(function()
@@ -286,20 +288,18 @@ local function executeApexAttack(targetMob)
     end
 
     -- 4. Clique 3D na tela se o mob estiver no campo de visão
-    if mobRoot then
-        local screenPos, onScreen = Camera:WorldToViewportPoint(mobRoot.Position)
-        if onScreen then
-            pcall(function()
-                VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
-                task.wait(0.005)
-                VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
-            end)
-        end
+    local screenPos, onScreen = Camera:WorldToViewportPoint(mobRoot.Position)
+    if onScreen then
+        pcall(function()
+            VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
+            task.wait(0.005)
+            VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
+        end)
     end
 end
 
 -- ====================================================================
--- 📱 INTERFACE MOBILE HUD APEX V28 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
+-- 📱 INTERFACE MOBILE HUD APEX V29 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
 -- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GhostHubApex"
@@ -348,7 +348,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST APEX V28 • STEALTH GOD"
+Title.Text = "👻 GHOST APEX V29 • ZERO GRAVITY"
 Title.TextColor3 = Color3.fromRGB(0, 255, 185)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 11
@@ -372,15 +372,15 @@ CloseBtn.MouseButton1Click:Connect(closeMenu)
 local MasterFarmBtn = Instance.new("TextButton", Main)
 MasterFarmBtn.Size = UDim2.new(1, -20, 0, 36)
 MasterFarmBtn.Position = UDim2.new(0, 10, 0, 44)
-MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(35, 40, 55)
-MasterFarmBtn.TextColor3 = Color3.fromRGB(200, 210, 225)
-MasterFarmBtn.Text = "▶️ INICIAR AUTO-FARM (DESATIVADO)"
+MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 110)
+MasterFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MasterFarmBtn.Text = "⏹️ PAUSAR AUTO-FARM (RODANDO)"
 MasterFarmBtn.Font = Enum.Font.GothamBold
 MasterFarmBtn.TextSize = 11
 MasterFarmBtn.Active = true
 Instance.new("UICorner", MasterFarmBtn).CornerRadius = UDim.new(0, 8)
 local MasterStroke = Instance.new("UIStroke", MasterFarmBtn)
-MasterStroke.Color = Color3.fromRGB(60, 70, 95)
+MasterStroke.Color = Color3.fromRGB(0, 255, 185)
 MasterStroke.Thickness = 1.5
 
 local function updateMasterVisual()
@@ -390,10 +390,10 @@ local function updateMasterVisual()
         MasterFarmBtn.Text = "⏹️ PAUSAR AUTO-FARM (RODANDO)"
         MasterStroke.Color = Color3.fromRGB(0, 255, 185)
     else
-        MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(35, 40, 55)
+        MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
         MasterFarmBtn.TextColor3 = Color3.fromRGB(200, 210, 225)
         MasterFarmBtn.Text = "▶️ INICIAR AUTO-FARM (PAUSADO)"
-        MasterStroke.Color = Color3.fromRGB(60, 70, 95)
+        MasterStroke.Color = Color3.fromRGB(70, 80, 105)
     end
 end
 
@@ -503,12 +503,12 @@ local function createToggle(name, initialVal, callback)
 end
 
 -- Toggles Solicitados
-createToggle("🛡️ FARM APENAS SOZINHO (SOLO)", Settings.SoloOnly, function(v) Settings.SoloOnly = v end)
 createToggle("🕳️ MODO SUBTERRÂNEO (ABAIXO DA TERRA)", Settings.Underground, function(v) Settings.Underground = v end)
-createToggle("👻 INVISIBILIDADE TOTAL (GHOST)", Settings.Invisibility, function(v) Settings.Invisibility = v end)
 createToggle("💥 KILL AURA MULTIALVO (MAPA TODO)", Settings.KillAura, function(v) Settings.KillAura = v end)
 createToggle("🗡️ USAR SWORD SKILLS NATIVAS", Settings.SwordSkills, function(v) Settings.SwordSkills = v end)
+createToggle("👻 INVISIBILIDADE TOTAL (GHOST)", Settings.Invisibility, function(v) Settings.Invisibility = v end)
 createToggle("🏃 ESTÂMINA INFINITA (100%)", Settings.InfStamina, function(v) Settings.InfStamina = v end)
+createToggle("🛡️ FARM APENAS SOZINHO (SOLO)", Settings.SoloOnly, function(v) Settings.SoloOnly = v end)
 createToggle("👻 NOCLIP (PAREDES/CHÃO)", Settings.NoClip, function(v) Settings.NoClip = v end)
 createToggle("🏰 AUTO-INICIAR DUNGEONS", Settings.AutoDungeon, function(v) Settings.AutoDungeon = v end)
 
@@ -517,7 +517,7 @@ local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "👻 APEX V28"
+FloatBtn.Text = "👻 APEX V29"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -567,11 +567,18 @@ RunService.Stepped:Connect(function()
         pcall(function() Event:FireServer("Actions", { "Sprint", "Disabled" }) end)
     end
 
-    -- NoClip Total (Permite ficar debaixo da terra)
-    if Settings.NoClip then
+    -- NoClip: Apenas se AutoFarm estiver ATIVO e caçando!
+    if Settings.NoClip and Settings.AutoFarm then
         for _, p in ipairs(char:GetDescendants()) do
             if p:IsA("BasePart") and p.CanCollide then
                 p.CanCollide = false
+            end
+        end
+    else
+        -- Quando pausado, mantém colisão para ficar firme no chão sem afundar
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") and (p.Name == "HumanoidRootPart" or p.Name == "Torso" or p.Name == "UpperTorso" or p.Name == "LowerTorso") then
+                p.CanCollide = true
             end
         end
     end
@@ -588,6 +595,13 @@ RunService.Stepped:Connect(function()
     end
 end)
 
+-- Varredura inicial imediata de alvos e armas
+task.spawn(function()
+    task.wait(0.2)
+    scanMyBlades()
+    scanTargets()
+end)
+
 -- ====================================================================
 -- 🚀 MOTOR PRINCIPAL EM HEARTBEAT (UNDERGROUND GLIDE & MULTI-AURA)
 -- ====================================================================
@@ -602,8 +616,22 @@ RunService.Heartbeat:Connect(function(dt)
 
     local now = os.clock()
 
-    -- Varredura rápida de Mobs a cada 0.25s
-    if (now - lastScanTick) >= 0.25 then
+    -- 🛡️ ANTI-GRAVIDADE ABSOLUTA: Trava o boneco no ar ou terra impedindo queda no void
+    local bv = root:FindFirstChild("ApexAntiGrav")
+    if Settings.AutoFarm then
+        if not bv then
+            bv = Instance.new("BodyVelocity")
+            bv.Name = "ApexAntiGrav"
+            bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+            bv.Velocity = Vector3.zero
+            bv.Parent = root
+        end
+    else
+        if bv then bv:Destroy() end
+    end
+
+    -- Varredura rápida de Mobs a cada 0.2s
+    if (now - lastScanTick) >= 0.20 then
         scanTargets()
         lastScanTick = now
     end
@@ -614,11 +642,11 @@ RunService.Heartbeat:Connect(function(dt)
         lastBladesTick = now
     end
 
-    -- 🛡️ CHECAGEM SOLO-ONLY: Se houver outro jogador no servidor, pausa imediatamente!
+    -- 🛡️ CHECAGEM SOLO-ONLY: Se houver outro jogador no servidor E a opção estiver ativa, pausa
     local otherPlayers = #Players:GetPlayers() - 1
     if Settings.SoloOnly and otherPlayers > 0 then
         StatusText.Text = string.format(
-            "🛡️ MODO SEGURO ATIVO: %d outros jogadores no servidor!\n⏸️ Farm pausado automaticamente para proteção.\n(Desative o botão 'SOLO' na lista se quiser farmar mesmo assim)",
+            "🛡️ MODO SEGURO: %d outros jogadores no servidor!\n⏸️ Farm pausado por segurança.",
             otherPlayers
         )
         root.AssemblyLinearVelocity = Vector3.zero
@@ -627,7 +655,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     -- ⏸️ PAUSA DO AUTO-FARM
     if not Settings.AutoFarm then
-        StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão grande verde acima para iniciar o farm!"
+        StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão verde acima para iniciar a caçada!"
         root.AssemblyLinearVelocity = Vector3.zero
         return
     end
@@ -639,7 +667,7 @@ RunService.Heartbeat:Connect(function(dt)
         local tRoot = currentTarget.Root
         local tPos = tRoot.Position
 
-        -- 🕳️ POSICIONAMENTO: Subterrâneo (debaixo da terra) ou Aéreo
+        -- 🕳️ POSICIONAMENTO: Subterrâneo (-4.2 studs) ou Aéreo (+4.2 studs)
         local targetGoalPos
         if Settings.Underground then
             targetGoalPos = tPos - Vector3.new(0, Settings.FarmDepth, 0)
@@ -661,13 +689,17 @@ RunService.Heartbeat:Connect(function(dt)
             dist,
             mins, secs,
             Stats.MobsSlain,
-            Settings.Underground and "Subterrâneo (-6 studs)" or "Aéreo (+4 studs)",
-            otherPlayers == 0 and "SOLO (Seguro)" or string.format("%d Players", otherPlayers + 1),
+            Settings.Underground and "Subterrâneo (-4 studs)" or "Aéreo (+4 studs)",
+            otherPlayers == 0 and "SOLO" or string.format("%d Players", otherPlayers + 1),
             #myBlades
         )
 
-        -- ⚡ DESLOCAMENTO CFrame ULTRA-RÁPIDO (280 studs/s atravessando o chão)
-        if dist > 1.0 then
+        -- ⚡ DESLOCAMENTO CFrame ULTRA-RÁPIDO COM RESGATE DO VOID
+        if dist > 60 then
+            -- Se estiver no void ou muito distante, teleporta imediatamente para o mob
+            root.CFrame = CFrame.lookAt(targetGoalPos, tPos)
+            root.AssemblyLinearVelocity = Vector3.zero
+        elseif dist > 1.2 then
             local moveDir = diff.Unit
             local step = math.min(dist, Settings.FlySpeed * dt)
             local newPos = myPos + (moveDir * step)
@@ -713,11 +745,11 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V28 STEALTH GOD] CARREGADO COM SUCESSO!")
-print("   • Modo Subterrâneo & Invisibilidade: ATIVOS")
-print("   • Modo Seguro Solo-Only: ATIVO")
+print("👻 [GHOST HUB V29 ZERO GRAVITY] CARREGADO COM SUCESSO!")
+print("   • Anti-Gravidade Absoluta: ATIVA (Zero queda no void)")
+print("   • Auto-Farm Imediato: ATIVO")
+print("   • Resgate de CFrame: ATIVO (>60 studs teleporta direto)")
 print("   • Kill Aura Multialvo à Distância: ATIVA")
 print("   • Prioridade Menor Vida: ATIVA")
-print("   • Botão Master & Toggles Touch: CORRIGIDOS")
-print("   • Auto-Farm Padrão: DESLIGADO (Inicie quando desejar)")
+print("   • Modo Subterrâneo Otimizado: -4.2 studs")
 print("═════════════════════════════════════════════════════════════")
