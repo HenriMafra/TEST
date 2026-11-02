@@ -2062,6 +2062,51 @@ end)
 --     end
 -- end)
 
+local ServerHopBox = Main:AddRightGroupbox('Server Hop')
+
+local TeleportService = game:GetService('TeleportService')
+local isHopping = false
+
+local function hopToEmptyServer()
+    if isHopping then return end
+    isHopping = true
+    Library:Notify('Buscando novo servidor via TeleportService...', 5)
+
+    task.spawn(function()
+        local placeId = game.PlaceId
+        pcall(function()
+            TeleportService:Teleport(placeId, LocalPlayer)
+        end)
+        task.wait(8)
+        isHopping = false
+    end)
+end
+
+ServerHopBox:AddToggle('AutoServerHop', { Text = 'Hop when player joins' })
+ServerHopBox:AddToggle('SoloOnly', { Text = 'Solo only (Hop if > 0 players)' })
+ServerHopBox:AddButton({ Text = 'Hop to new server now', Func = hopToEmptyServer })
+
+Players.PlayerAdded:Connect(function(player)
+    if player ~= LocalPlayer and Toggles.AutoServerHop and Toggles.AutoServerHop.Value then
+        Library:Notify(`Player {player.Name} joined! Hopping server...`, 5)
+        task.wait(1.5)
+        hopToEmptyServer()
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if Toggles.SoloOnly and Toggles.SoloOnly.Value then
+            local otherPlayers = #Players:GetPlayers() - 1
+            if otherPlayers > 0 and not isHopping then
+                Library:Notify(`{otherPlayers} other player(s) in server. Hopping...`, 5)
+                hopToEmptyServer()
+            end
+        end
+    end
+end)
+
 local Miscs = Main:AddLeftTabbox()
 
 local Misc1 = Miscs:AddTab('Misc')
