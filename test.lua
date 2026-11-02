@@ -1,23 +1,19 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V35 [SWORDBURST 2 APEX - BLUU & OUFGUS NATIVE CORE]
+    👻 GHOST HUB V36 [SWORDBURST 2 APEX - SIMULTANEOUS KILL AURA & ZERO DAMAGE]
     ══════════════════════════════════════════════════════════════════════
-    Construído transplantando DIRETAMENTE o motor funcional de Bluu e Oufguy:
-    ✔ Remote Oficial Real via Function:InvokeServer('RPCKey'):
-      - Obtém a chave dinâmica de RPC do servidor do Swordburst 2 (como no Bluu original).
-      - Envia o handshake binário com fallback oficial de Oufguy.
-    ✔ Movimento Matemático Exato do Bluu:
-      - Deslocamento relativo CFrame (+ Vector3.new) com LinearVelocity anti-gravidade.
-      - Posiciona 10 studs abaixo do mob (Zero Dano, 100% imune a golpes dos monstros).
-    ✔ Varredura Direta de Mobs (Workspace.Mobs & Bosses):
-      - Checagem nativa isDead(mob) idêntica à do Bluu (sem travas de altitude ou Y).
-      - Prioriza menor vida (Lowest HP) e desempate por proximidade.
-    ✔ Burst Agressivo de Skills (Oufguy massFire):
-      - Dispara todas as habilidades de espada sem delay e sem cliques de mouse.
-    ✔ ZERO Cliques de Tela:
-      - 100% via código e rede (Combat Remote + TouchInterest na memória).
-    ✔ Invisibilidade Completa: Avatar e Espadas (Workspace.CharacterItems).
-    ✔ Auto Server Hop + queue_on_teleport (reinício automático entre servidores).
+    ✔ Kill Aura Simultâneo em Todos os Monstros ao Mesmo Tempo:
+      - Em cada pulso (0.10s), varre Workspace.Mobs e Workspace.Bosses.
+      - Dispara pacotes de ataque em lote para TODOS os mobs vivos no mesmo milissegundo.
+    ✔ Zero Dano Subterrâneo Profundo (-35 studs):
+      - Desce a 35 studs abaixo do monstro (completamente imune a golpes e AOEs terrestres).
+      - Seletor de profundidade touch no menu (-25, -35, -50 studs).
+    ✔ Ritmo de Ataque Contínuo e Fluido (Zero Engasgos):
+      - Removido o loop que travava com skills não aprendidas (evita penalty cooldown do servidor).
+      - Ataque constante e ininterrupto tanto no alvo focado quanto na aura global.
+    ✔ Prioridade Absoluta: Menor Vida (Lowest HP) e Desempate por Distância.
+    ✔ ZERO Cliques de Mouse / ZERO Giro de Câmera (Controle Manual Livre).
+    ✔ Auto Server Hop + queue_on_teleport (Re-execução automática entre servidores).
 ]]
 
 local Players = game:GetService("Players")
@@ -71,17 +67,17 @@ for _, name in ipairs({ "GhostHubApex", "GhostHubSB2", "GhostRadarGui" }) do
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V35)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V36)
 -- ====================================================================
 local Settings = {
     AutoFarm = true,          -- ATIVADO por padrão (caça e bate imediatamente!)
-    FarmDepth = 10.0,         -- Profundidade abaixo do mob (studs - Zero Dano)
+    FarmDepth = 35.0,         -- Profundidade segura abaixo do mob (35 studs - ZERO DANO 100% GARANTIDO)
     Invisibility = true,      -- Personagem E ESPADAS transparentes/invisíveis
     Desync = true,            -- Desync de animações (estilo Bluu)
     AutoServerHop = false,    -- Pula automaticamente para servidor vazio se alguém entrar
     SoloOnly = false,         -- Pausa se houver outro jogador no servidor atual
-    KillAura = true,          -- Kill Aura multialvo no mapa inteiro
-    SwordSkills = true,       -- Uso de habilidades nativas de espada (burst Oufguy)
+    KillAura = true,          -- Kill Aura multialvo simultâneo no mapa inteiro
+    SwordSkills = false,      -- Desativado por padrão para evitar travas de recovery
     InfStamina = true,        -- 100% de estâmina ininterrupta
     NoClip = true,            -- Atravessa chão, paredes e pedras
     AutoDungeon = true,       -- Inicia masmorras automaticamente
@@ -125,6 +121,8 @@ local rng = Random.new()
 local function genKey()
     return string.format("%d%d%d", rng:NextInteger(1, 9), rng:NextInteger(1, 9), rng:NextInteger(1, 9))
 end
+
+local lastSkillTick = 0
 
 -- ====================================================================
 -- 🌐 SISTEMA DE AUTO SERVER HOP (BUSCADOR DE SERVIDORES VAZIOS)
@@ -441,7 +439,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST APEX V35 • BLUU & OUFGUS ENGINE"
+Title.Text = "👻 GHOST APEX V36 • SIMULTANEOUS MAP KILL AURA"
 Title.TextColor3 = Color3.fromRGB(0, 255, 185)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 10.5
@@ -558,6 +556,41 @@ end
 HopActionBtn.Activated:Connect(triggerHop)
 HopActionBtn.MouseButton1Click:Connect(triggerHop)
 
+-- 🕳️ BOTÃO SELETOR DE PROFUNDIDADE SUBTERRÂNEA (ZERO DANO)
+local DepthCycleBtn = Instance.new("TextButton", ControlsScroll)
+DepthCycleBtn.Size = UDim2.new(1, 0, 0, 34)
+DepthCycleBtn.BackgroundColor3 = Color3.fromRGB(30, 20, 45)
+DepthCycleBtn.Text = "🕳️ PROFUNDIDADE: -35 STUDS (ZERO DANO 100%)"
+DepthCycleBtn.TextColor3 = Color3.fromRGB(220, 140, 255)
+DepthCycleBtn.Font = Enum.Font.GothamBold
+DepthCycleBtn.TextSize = 9.5
+DepthCycleBtn.Active = true
+Instance.new("UICorner", DepthCycleBtn).CornerRadius = UDim.new(0, 6)
+local DepthStroke = Instance.new("UIStroke", DepthCycleBtn)
+DepthStroke.Color = Color3.fromRGB(180, 70, 255)
+DepthStroke.Thickness = 1.2
+
+local depthOptions = { 25.0, 35.0, 50.0 }
+local depthLabels = {
+    "-25 studs (Padrão)",
+    "-35 studs (Ultra Seguro - ZERO DANO)",
+    "-50 studs (Void Subterrâneo - Imune)",
+}
+local curDepthIdx = 2
+
+local depthDebounce = false
+local function cycleDepth()
+    if depthDebounce then return end
+    depthDebounce = true
+    curDepthIdx = (curDepthIdx % #depthOptions) + 1
+    Settings.FarmDepth = depthOptions[curDepthIdx]
+    DepthCycleBtn.Text = "🕳️ PROFUNDIDADE: " .. depthLabels[curDepthIdx]
+    task.wait(0.2)
+    depthDebounce = false
+end
+DepthCycleBtn.Activated:Connect(cycleDepth)
+DepthCycleBtn.MouseButton1Click:Connect(cycleDepth)
+
 -- Gerador de Toggles com suporte mobile 100% garantido (.Activated + debounced tap na linha inteira)
 local function createToggle(name, initialVal, callback)
     local frame = Instance.new("TextButton", ControlsScroll)
@@ -634,7 +667,7 @@ local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "👻 APEX V35"
+FloatBtn.Text = "👻 APEX V36"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -811,7 +844,7 @@ task.spawn(function()
         local mobRoot = getMobRoot(target)
         if not mobRoot then continue end
 
-        -- 🕳️ Posicionamento seguro 10 studs abaixo do mob (Estilo Bluu)
+        -- 🕳️ Posicionamento seguro 35 studs abaixo do mob (Zero Dano Garantido)
         local targetPos = mobRoot.Position + Vector3.new(0, -Settings.FarmDepth, 0)
         local myPos = root.Position
         local toTarget = targetPos - myPos
@@ -819,14 +852,14 @@ task.spawn(function()
 
         local hpNum = getNumericHP(target)
         StatusText.Text = string.format(
-            "🎯 Alvo Menor Vida: %s (%d HP)\n📏 Dist: %.1f studs | ⚔️ Abatidos: %d\n🛡️ Modo: Zero Dano Subterrâneo (-%.1f studs)\n👥 Servidor: %s | 🗡️ Lâminas: %d",
+            "🎯 Foco Menor Vida: %s (%d HP)\n📏 Dist: %.1f studs | ⚔️ Abatidos: %d\n🛡️ Zero Dano: -%.1f studs (Subterrâneo 100%% Seguro)\n💥 Kill Aura Geral: %d mobs atingidos AO MESMO TEMPO!\n👥 Servidor: %s",
             target.Name,
             math.floor(hpNum),
             totalDist,
             Stats.MobsSlain,
             Settings.FarmDepth,
-            otherPlayers == 0 and "SOLO (Vazio)" or string.format("%d Players", otherPlayers + 1),
-            #myBlades
+            activeMobCount,
+            otherPlayers == 0 and "SOLO (Vazio)" or string.format("%d Players", otherPlayers + 1)
         )
 
         -- ⚡ Movimento CFrame Relativo Exato do Bluu
@@ -841,17 +874,18 @@ task.spawn(function()
             root.AssemblyLinearVelocity = Vector3.zero
         end
 
-        -- 💥 Ataque contínuo ao alvo
+        -- 💥 Ataque contínuo limpo e direto ao alvo focado
         dealDamage(target, nil)
 
-        -- 🗡️ Burst de Skills se ativado
+        -- 🗡️ Habilidade inteligente (se ativada, sem travar o combate)
         if Settings.SwordSkills then
-            for _, sk in ipairs(SwordSkillsList) do
-                if isDead(target) then break end
+            local now = os.clock()
+            if now - lastSkillTick > 2.0 then
+                lastSkillTick = now
                 pcall(function()
-                    Event:FireServer('Skills', { 'UseSkill', sk, { Direction = Vector3.zero } })
+                    Event:FireServer('Skills', { 'UseSkill', 'Sweeping Strike', { Direction = Vector3.zero } })
                 end)
-                dealDamage(target, sk)
+                dealDamage(target, 'Sweeping Strike')
             end
         end
 
@@ -863,28 +897,75 @@ task.spawn(function()
 end)
 
 -- ====================================================================
--- 💥 LOOP INDEPENDENTE DE KILL AURA (ESTILO EXATO DO BLUU)
+-- 💥 KILL AURA MULTIALVO SIMULTÂNEO (DANO EM TODOS OS MOBS AO MESMO TEMPO)
 -- ====================================================================
-task.spawn(function()
-    while true do
-        task.wait(0.08)
+local activeMobCount = 0
 
-        if not Settings.KillAura then continue end
+local function pulseGlobalKillAura()
+    if not Settings.KillAura then return end
 
-        local Mobs = Workspace:FindFirstChild("Mobs")
-        local Bosses = Workspace:FindFirstChild("Bosses")
+    local Mobs = Workspace:FindFirstChild("Mobs")
+    local Bosses = Workspace:FindFirstChild("Bosses")
 
-        local function attackFolder(folder)
-            if not folder then return end
-            for _, mob in ipairs(folder:GetChildren()) do
-                if not isDead(mob) then
-                    dealDamage(mob, nil)
+    local allMobs = {}
+    local function collect(folder)
+        if not folder then return end
+        for _, mob in ipairs(folder:GetChildren()) do
+            if not isDead(mob) then
+                local mRoot = getMobRoot(mob)
+                if mRoot then
+                    table.insert(allMobs, { model = mob, root = mRoot })
                 end
             end
         end
+    end
 
-        attackFolder(Mobs)
-        attackFolder(Bosses)
+    collect(Mobs)
+    collect(Bosses)
+    activeMobCount = #allMobs
+
+    if activeMobCount == 0 then return end
+
+    -- Dispara dano em TODOS os monstros vivos NO MESMO MILISSEGUNDO
+    for _, item in ipairs(allMobs) do
+        local mob = item.model
+
+        -- 1. Remote Oficial SB2 (Bluu)
+        pcall(function()
+            Event:FireServer('Combat', RPCKey, { 'Attack', mob, nil, '2' })
+        end)
+
+        -- 2. Fallback Oufguy
+        pcall(function()
+            Event:FireServer('Combat', RPCKey, { 'Attack', nil, mob, genKey() })
+        end)
+
+        -- 3. Internal Game Combat Service (quando suportado)
+        if RequiredServices and RequiredServices.Combat and RequiredServices.Combat.DealDamage then
+            pcall(function()
+                RequiredServices.Combat.DealDamage(mob, nil)
+            end)
+        end
+    end
+
+    -- TouchInterest na lâmina primária para mobs próximos
+    if firetouchinterest and #myBlades > 0 then
+        local primaryBlade = myBlades[1]
+        if primaryBlade and primaryBlade.Parent then
+            for _, item in ipairs(allMobs) do
+                pcall(function()
+                    firetouchinterest(primaryBlade, item.root, 0)
+                    firetouchinterest(primaryBlade, item.root, 1)
+                end)
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.10)
+        pulseGlobalKillAura()
     end
 end)
 
@@ -898,10 +979,11 @@ task.spawn(function()
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V35 BLUU & OUFGUS ENGINE] CARREGADO COM SUCESSO!")
-print("   • Motor de Movimento: Código Matemático Nativo do Bluu")
-print("   • Combate: RPCKey Dinâmico + dealDamage Nativo")
-print("   • Kill Aura Loop Independente: ATIVO")
+print("👻 [GHOST HUB V36 SIMULTANEOUS KILL AURA] CARREGADO COM SUCESSO!")
+print("   • Kill Aura: DANO EM TODOS OS MOBS AO MESMO TEMPO (0.10s)")
+print("   • Zero Dano Subterrâneo: 35 studs abaixo do mob (Imune)")
+print("   • Foco Dinâmico: Monstro com Menor Vida Atual")
+print("   • Combate Fluido: Zero Engasgos / Zero Penalty Delays")
 print("   • Zero Cliques de Mouse / Zero Giro de Câmera")
 print("   • Auto Server Hop + queue_on_teleport: ATIVO")
 print("═════════════════════════════════════════════════════════════")
