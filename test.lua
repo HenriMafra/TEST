@@ -553,93 +553,107 @@ local flipUpsideDown = function(part)
     part.CFrame = CFrame.new(part.Position) * finalRotation
 end
 
+local isAutofarmRunning = false
+
 Autofarm:AddToggle('Autofarm', { Text = 'Enabled' }):OnChanged(function()
     toggleLerp(Toggles.Autofarm)
     enableLinearVelocity(Toggles.Autofarm.Value)
     toggleNoclip(Toggles.Autofarm)
 
-    local target
-    local shouldUpdateTarget = true
-
-    while Toggles.Autofarm.Value do
-        local deltaTime = task.wait()
-
-        if Humanoid.Health == 0 then continue end
-
-        local inputVec = Vector3.new(controls.D - controls.A, 0, controls.S - controls.W)
-        if inputVec.Magnitude ~= 0 then
-            local flySpeed = 100
-            local direction = Camera.CFrame.Rotation * inputVec.Unit
-            local moveDelta = direction * flySpeed * deltaTime
-            HumanoidRootPart.CFrame += moveDelta * math.clamp(deltaTime * flySpeed / moveDelta.Magnitude, 0, 1)
-            continue
-        end
-
-        if shouldUpdateTarget then
-            shouldUpdateTarget = false
-            target = getAutofarmTarget()
-            task.delay(0.15, function()
-                shouldUpdateTarget = true
-            end)
-        end
-
-        if not target then
-            if Toggles.UseWaypoint.Value and waypoint then
-                HumanoidRootPart.CFrame = HumanoidRootPart.CFrame.Rotation + waypoint.Position
-            end
-            continue
-        end
-
-        if isDead(target) or Options.IgnoreMobs.Value[target.Name] then
-            shouldUpdateTarget = true
-            continue
-        end
-
-        local rootPart, radius, vertical, horizontal = calculateAutofarmOffset(target)
-        if not rootPart then continue end
-
-		-- if Options.AutofarmVerticalOffset.Value < 0 then
-		--     flipUpsideDown(HumanoidRootPart)
-		-- end
-
-		local targetPos = rootPart.Position
-			+ Vector3.new(0, (HumanoidRootPart.Size.Y - rootPart.Size.Y) * 0.5 + vertical, 0)
-
-        if rootPart:FindFirstChild('BodyVelocity') and rootPart.BodyVelocity.VectorVelocity.Magnitude > 0 then
-            targetPos += rootPart.BodyVelocity.VectorVelocity.Unit
-        end
-
-        local diff = HumanoidRootPart.Position - rootPart.Position
-        local horizOffset = Vector3.new(diff.X, 0, diff.Z)
-
-        if horizontal > 0 and horizOffset.Magnitude ~= 0 then
-            targetPos += horizOffset.Unit * horizontal
-        end
-
-        local toTarget = targetPos - HumanoidRootPart.Position
-        local horizToTarget = Vector3.new(toTarget.X, 0, toTarget.Z)
-
-        -- if Options.AutofarmSpeed.Value == Options.AutofarmSpeed.Max then
-        --     HumanoidRootPart.CFrame *= CFrame.Angles(0, math.pi / 8, 0)
-        -- end
-
-        local totalDist = toTarget.Magnitude
-        if totalDist == 0 then continue end
-
-        HumanoidRootPart.CFrame += Vector3.new(0, toTarget.Y, 0)
-
-        local horizDist = horizToTarget.Magnitude
-        if horizDist == 0 then continue end
-
-        local moveDir = horizToTarget.Unit
-        local speed = Options.AutofarmSpeed.Value
-        if speed == Options.AutofarmSpeed.Max then
-            speed = math.huge
-        end
-
-        local alpha = math.clamp(deltaTime * speed / horizDist, 0, 1)
-        HumanoidRootPart.CFrame += moveDir * totalDist * alpha
+    if not Toggles.Autofarm.Value then
+        return
     end
+
+    if isAutofarmRunning then
+        return
+    end
+
+    task.spawn(function()
+        isAutofarmRunning = true
+        local target
+        local shouldUpdateTarget = true
+
+        while Toggles.Autofarm.Value do
+            local deltaTime = task.wait()
+
+            if Humanoid.Health == 0 then continue end
+
+            local inputVec = Vector3.new(controls.D - controls.A, 0, controls.S - controls.W)
+            if inputVec.Magnitude ~= 0 then
+                local flySpeed = 100
+                local direction = Camera.CFrame.Rotation * inputVec.Unit
+                local moveDelta = direction * flySpeed * deltaTime
+                HumanoidRootPart.CFrame += moveDelta * math.clamp(deltaTime * flySpeed / moveDelta.Magnitude, 0, 1)
+                continue
+            end
+
+            if shouldUpdateTarget then
+                shouldUpdateTarget = false
+                target = getAutofarmTarget()
+                task.delay(0.15, function()
+                    shouldUpdateTarget = true
+                end)
+            end
+
+            if not target then
+                if Toggles.UseWaypoint.Value and waypoint then
+                    HumanoidRootPart.CFrame = HumanoidRootPart.CFrame.Rotation + waypoint.Position
+                end
+                continue
+            end
+
+            if isDead(target) or Options.IgnoreMobs.Value[target.Name] then
+                shouldUpdateTarget = true
+                continue
+            end
+
+            local rootPart, radius, vertical, horizontal = calculateAutofarmOffset(target)
+            if not rootPart then continue end
+
+            -- if Options.AutofarmVerticalOffset.Value < 0 then
+            --     flipUpsideDown(HumanoidRootPart)
+            -- end
+
+            local targetPos = rootPart.Position
+                + Vector3.new(0, (HumanoidRootPart.Size.Y - rootPart.Size.Y) * 0.5 + vertical, 0)
+
+            if rootPart:FindFirstChild('BodyVelocity') and rootPart.BodyVelocity.VectorVelocity.Magnitude > 0 then
+                targetPos += rootPart.BodyVelocity.VectorVelocity.Unit
+            end
+
+            local diff = HumanoidRootPart.Position - rootPart.Position
+            local horizOffset = Vector3.new(diff.X, 0, diff.Z)
+
+            if horizontal > 0 and horizOffset.Magnitude ~= 0 then
+                targetPos += horizOffset.Unit * horizontal
+            end
+
+            local toTarget = targetPos - HumanoidRootPart.Position
+            local horizToTarget = Vector3.new(toTarget.X, 0, toTarget.Z)
+
+            -- if Options.AutofarmSpeed.Value == Options.AutofarmSpeed.Max then
+            --     HumanoidRootPart.CFrame *= CFrame.Angles(0, math.pi / 8, 0)
+            -- end
+
+            local totalDist = toTarget.Magnitude
+            if totalDist == 0 then continue end
+
+            HumanoidRootPart.CFrame += Vector3.new(0, toTarget.Y, 0)
+
+            local horizDist = horizToTarget.Magnitude
+            if horizDist == 0 then continue end
+
+            local moveDir = horizToTarget.Unit
+            local speed = Options.AutofarmSpeed.Value
+            if speed == Options.AutofarmSpeed.Max then
+                speed = math.huge
+            end
+
+            local alpha = math.clamp(deltaTime * speed / horizDist, 0, 1)
+            HumanoidRootPart.CFrame += moveDir * totalDist * alpha
+        end
+        isAutofarmRunning = false
+    end)
 end)
 
 Autofarm:AddSlider('AutofarmSpeed', {
@@ -1070,56 +1084,71 @@ local UpdateAutowalkTarget = function()
     return waypoints, target
 end
 
+local isAutowalkRunning = false
+
 Autowalk:AddToggle('Autowalk', { Text = 'Enabled' }):OnChanged(function()
     toggleLerp(Toggles.Autowalk)
     enableLinearVelocity(false)
-    local waypoints = {}
-    local nextWaypointIdx = 2
-    local shouldRefreshTarget = true
-    local target
-    while Toggles.Autowalk.Value do
-        RenderStepped:Wait()
 
-        if Humanoid.Health == 0 then continue end
+    if not Toggles.Autowalk.Value then
+        return
+    end
 
-        if not (controls.D - controls.A == 0 and controls.S - controls.W == 0) then
-            continue
-        end
+    if isAutowalkRunning then
+        return
+    end
 
-        if shouldRefreshTarget then
-            shouldRefreshTarget = false
-            task.spawn(function()
-                waypoints, target = UpdateAutowalkTarget()
-                nextWaypointIdx = 2
-            end)
-            task.delay(0.15, function()
+    task.spawn(function()
+        isAutowalkRunning = true
+        local waypoints = {}
+        local nextWaypointIdx = 2
+        local shouldRefreshTarget = true
+        local target
+        while Toggles.Autowalk.Value do
+            RenderStepped:Wait()
+
+            if Humanoid.Health == 0 then continue end
+
+            if not (controls.D - controls.A == 0 and controls.S - controls.W == 0) then
+                continue
+            end
+
+            if shouldRefreshTarget then
+                shouldRefreshTarget = false
+                task.spawn(function()
+                    waypoints, target = UpdateAutowalkTarget()
+                    nextWaypointIdx = 2
+                end)
+                task.delay(0.15, function()
+                    shouldRefreshTarget = true
+                end)
+            end
+
+            if not target then
+                if not Toggles.UseWaypoint.Value then continue end
+            elseif target ~= waypoint and isDead(target) or Options.IgnoreMobs.Value[target.Name] then
                 shouldRefreshTarget = true
-            end)
-        end
+                continue
+            end
 
-        if not target then
-            if not Toggles.UseWaypoint.Value then continue end
-        elseif target ~= waypoint and isDead(target) or Options.IgnoreMobs.Value[target.Name] then
-            shouldRefreshTarget = true
-            continue
-        end
-
-        local nextWaypoint = waypoints[nextWaypointIdx]
-        if nextWaypoint then
-            local waypointPositon = nextWaypoint.Position
-            local myPosition = HumanoidRootPart.Position
-            local difference = waypointPositon - myPosition
-            local horizontalDifference = Vector3.new(difference.X, 0, difference.Z)
-            if horizontalDifference.Magnitude > 0.1 then
-                if nextWaypoint.Action == Enum.PathWaypointAction.Jump then
-                    Humanoid.Jump = true
+            local nextWaypoint = waypoints[nextWaypointIdx]
+            if nextWaypoint then
+                local waypointPositon = nextWaypoint.Position
+                local myPosition = HumanoidRootPart.Position
+                local difference = waypointPositon - myPosition
+                local horizontalDifference = Vector3.new(difference.X, 0, difference.Z)
+                if horizontalDifference.Magnitude > 0.1 then
+                    if nextWaypoint.Action == Enum.PathWaypointAction.Jump then
+                        Humanoid.Jump = true
+                    end
+                    LocalPlayer:Move(horizontalDifference)
+                else
+                    nextWaypointIdx += 1
                 end
-                LocalPlayer:Move(horizontalDifference)
-            else
-                nextWaypointIdx += 1
             end
         end
-    end
+        isAutowalkRunning = false
+    end)
 end)
 
 Autowalk:AddToggle('Pathfind', { Text = 'Pathfind', Default = true })
@@ -1477,70 +1506,84 @@ if RequiredServices and not swingFunction then
     stopSwingFunction = RequiredServices.Actions.StopSwing
 end
 
+local isKillauraRunning = false
+
 Killaura:AddToggle('Killaura', { Text = 'Enabled' }):OnChanged(function()
-    toggleSwingDamage(false)
-    while Toggles.Killaura.Value do
-        task.wait(0.01)
+    if not Toggles.Killaura.Value then
+        return
+    end
 
-        if Humanoid.Health == 0 then continue end
+    if isKillauraRunning then
+        return
+    end
 
-        local attacked = 0
+    task.spawn(function()
+        isKillauraRunning = true
+        toggleSwingDamage(false)
+        while Toggles.Killaura.Value do
+            task.wait(0.01)
 
-        for _, target in next, Mobs:GetChildren() do
-            -- if attacked >= Options.KillauraMaxTargets.Value then
-            --     break
-            -- end
-            if onCooldown[target] then continue end
-            if isDead(target) then continue end
-            local rootPart = target.HumanoidRootPart
-            local targetPos = rootPart.Position + Vector3.new(
-                0,
-                (HumanoidRootPart.Size.Y - rootPart.Size.Y) * 0.5,
-                0
-            )
-            if rootPart:FindFirstChild('BodyVelocity') and rootPart.BodyVelocity.VectorVelocity.Magnitude > 0 then
-                targetPos += rootPart.BodyVelocity.VectorVelocity.Unit
-            end
-            local range = Options.KillauraRange.Value
-            if range == Options.KillauraRange.Max then
-                range = math.max(rootPart.Size.X, rootPart.Size.Z) * 0.5 + 20
-            end
-            if (targetPos - HumanoidRootPart.Position).Magnitude > range then
-                continue
-            end
-            attack(target)
-            attacked += 1
-        end
+            if Humanoid.Health == 0 then continue end
 
-        if Toggles.AttackPlayers.Value then
-            for _, player in next, Players:GetPlayers() do
+            local attacked = 0
+
+            for _, target in next, Mobs:GetChildren() do
                 -- if attacked >= Options.KillauraMaxTargets.Value then
                 --     break
                 -- end
-                if player == LocalPlayer then continue end
-                if Options.IgnorePlayers.Value[player] then continue end
-                local target = player.Character
-                if not target then continue end
                 if onCooldown[target] then continue end
                 if isDead(target) then continue end
                 local rootPart = target.HumanoidRootPart
+                local targetPos = rootPart.Position + Vector3.new(
+                    0,
+                    (HumanoidRootPart.Size.Y - rootPart.Size.Y) * 0.5,
+                    0
+                )
+                if rootPart:FindFirstChild('BodyVelocity') and rootPart.BodyVelocity.VectorVelocity.Magnitude > 0 then
+                    targetPos += rootPart.BodyVelocity.VectorVelocity.Unit
+                end
                 local range = Options.KillauraRange.Value
                 if range == Options.KillauraRange.Max then
                     range = math.max(rootPart.Size.X, rootPart.Size.Z) * 0.5 + 20
                 end
-                if (rootPart.Position - HumanoidRootPart.Position).Magnitude > range then
+                if (targetPos - HumanoidRootPart.Position).Magnitude > range then
                     continue
                 end
                 attack(target)
                 attacked += 1
             end
-        end
 
-        if Toggles.KillauraSwing and Toggles.KillauraSwing.Value and swingFunction then
-            task.spawn(attacked > 0 and swingFunction or stopSwingFunction)
+            if Toggles.AttackPlayers.Value then
+                for _, player in next, Players:GetPlayers() do
+                    -- if attacked >= Options.KillauraMaxTargets.Value then
+                    --     break
+                    -- end
+                    if player == LocalPlayer then continue end
+                    if Options.IgnorePlayers.Value[player] then continue end
+                    local target = player.Character
+                    if not target then continue end
+                    if onCooldown[target] then continue end
+                    if isDead(target) then continue end
+                    local rootPart = target.HumanoidRootPart
+                    local range = Options.KillauraRange.Value
+                    if range == Options.KillauraRange.Max then
+                        range = math.max(rootPart.Size.X, rootPart.Size.Z) * 0.5 + 20
+                    end
+                    if (rootPart.Position - HumanoidRootPart.Position).Magnitude > range then
+                        continue
+                    end
+                    attack(target)
+                    attacked += 1
+                end
+            end
+
+            if Toggles.KillauraSwing and Toggles.KillauraSwing.Value and swingFunction then
+                task.spawn(attacked > 0 and swingFunction or stopSwingFunction)
+            end
         end
-    end
-    toggleSwingDamage(true)
+        toggleSwingDamage(true)
+        isKillauraRunning = false
+    end)
 end)
 
 if swingFunction then
@@ -1820,21 +1863,36 @@ else
     end)
 end
 
+local isFlyRunning = false
+
 AdditionalCheats:AddToggle('Fly', { Text = 'Fly' }):OnChanged(function()
     toggleLerp(Toggles.Fly)
     enableLinearVelocity(Toggles.Fly.Value)
-    while Toggles.Fly.Value do
-        local deltaTime = task.wait()
-        if not (controls.D - controls.A == 0 and controls.S - controls.W == 0) then
-            local flySpeed = 80 -- math.max(Humanoid.WalkSpeed, 60)
-            local targetPos = Camera.CFrame.Rotation
-                * Vector3.new(controls.D - controls.A, 0, controls.S - controls.W)
-                * flySpeed * deltaTime
-            HumanoidRootPart.CFrame += targetPos
-                * math.clamp(deltaTime * flySpeed / targetPos.Magnitude, 0, 1)
-            continue
-        end
+
+    if not Toggles.Fly.Value then
+        return
     end
+
+    if isFlyRunning then
+        return
+    end
+
+    task.spawn(function()
+        isFlyRunning = true
+        while Toggles.Fly.Value do
+            local deltaTime = task.wait()
+            if not (controls.D - controls.A == 0 and controls.S - controls.W == 0) then
+                local flySpeed = 80 -- math.max(Humanoid.WalkSpeed, 60)
+                local targetPos = Camera.CFrame.Rotation
+                    * Vector3.new(controls.D - controls.A, 0, controls.S - controls.W)
+                    * flySpeed * deltaTime
+                HumanoidRootPart.CFrame += targetPos
+                    * math.clamp(deltaTime * flySpeed / targetPos.Magnitude, 0, 1)
+                continue
+            end
+        end
+        isFlyRunning = false
+    end)
 end)
 
 AdditionalCheats:AddToggle('Noclip', { Text = 'Noclip' }):OnChanged(function()
@@ -3301,17 +3359,23 @@ SaveManager:SetLibrary(Library)
 SaveManager:SetFolder('Bluu/Swordburst 2')
 SaveManager:IgnoreThemeSettings()
 SaveManager:BuildConfigSection(Settings)
-SaveManager:LoadAutoloadConfig()
-
--- Restauração automática do servidor anterior (Auto-Resume on Hop)
+-- Restauração automática inteligente e sem corrida de threads
 task.spawn(function()
-    task.wait(2)
+    -- Garante que o personagem e a física estejam presentes
+    if not Character or not Character:FindFirstChild('HumanoidRootPart') then
+        LocalPlayer.CharacterAdded:Wait()
+    end
+    task.wait(1.5)
+
     pcall(function()
-        if SaveManager and SaveManager.Load and isfile and isfile('Bluu/Swordburst 2/settings/auto_server_hop.json') then
+        local hopFile = 'Bluu/Swordburst 2/settings/auto_server_hop.json'
+        if SaveManager and SaveManager.Load and isfile and isfile(hopFile) then
             local ok, err = SaveManager:Load('auto_server_hop')
             if ok then
-                Library:Notify('[Auto-Resume] Todas as funções do servidor anterior foram restauradas!', 6)
+                Library:Notify('[Auto-Resume] Funções do servidor anterior restauradas com sucesso!', 6)
             end
+        else
+            SaveManager:LoadAutoloadConfig()
         end
     end)
 end)
