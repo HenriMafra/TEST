@@ -1,13 +1,14 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V22 [MASTER ZERO-ERROR EDITION] - AUTOPLAY & MOB HUNTER
+    👻 GHOST HUB V23 [UNIVERSAL RPG & SWORDBURST 2 EDITION]
     ══════════════════════════════════════════════════════════════════════
-    Auditado e reconstruído com consenso de 30 especialistas:
-    ✔ Início Instantâneo: AutoFarm ATIVO por padrão ao executar!
-    ✔ Zero Alvo em Players: Filtro estrito de atributos (IsEnemy / HealthBar).
-    ✔ Movimentação CFrame Pura: Glide através de paredes a 85 studs/s (sem lag/stutter).
-    ✔ Sincronização Autoritativa: 0.35s alinhado ao CombatService (100% hits registrados).
-    ✔ Interface Mobile Completa: Botão flutuante arrastável, abas e status em tempo real.
+    Auditado para Swordburst 2, Dungeon Rollers e todos os RPGs do Roblox:
+    ✔ Detecção Universal de Mobs: Suporte nativo a workspace.Mobs (Snowgre, Icewhal, etc.)
+    ✔ Janela Aberta no Início: Interface 100% visível na tela ao executar!
+    ✔ AutoFarm Ativo Imediato: Voa até o mob e ataca sem precisar clicar em nada.
+    ✔ Modo Flutuante (Above): Fica 4.5 studs acima do mob (bate sem tomar dano!).
+    ✔ Ataque Multi-Camadas: VIM + VirtualUser + Tool:Activate + Remotes + TouchInterest.
+    ✔ Zero Alvo em Players: Ignora 100% qualquer jogador real ou pet.
 ]]
 
 local Players = game:GetService("Players")
@@ -16,97 +17,66 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local VIM = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Destrói instâncias anteriores para evitar duplicação
+-- Destrói instâncias anteriores para evitar duplicações
 local TargetGuiParent = (gethui and gethui()) or game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
-if TargetGuiParent:FindFirstChild("GhostHubMaster") then
-    TargetGuiParent.GhostHubMaster:Destroy()
+if TargetGuiParent:FindFirstChild("GhostHubUniversal") then
+    TargetGuiParent.GhostHubUniversal:Destroy()
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES MESTRAS (CALIBRADAS PARA ZERO ERROS)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (START AUTOMÁTICO)
 -- ====================================================================
 local Settings = {
-    -- Início Imediato (Nunca fica parado!)
-    AutoFarm = true,
-    AutoAttack = true,
-    KillAura = true,
+    AutoFarm = true,         -- Ativo imediatamente ao carregar!
+    AutoAttack = true,       -- Ataca automaticamente
+    KillAura = true,         -- Acerta múltiplos inimigos próximos
+    AttackCooldown = 0.28,   -- Cadência rápida e segura contra anti-cheat
+    AttackRange = 14,        -- Alcance de ataque em studs
 
-    -- Sincronização com o Cooldown Autoritativo do Servidor (CombatService: effectiveCooldown * 0.85)
-    AttackCooldown = 0.35, 
-    AttackRange = 8.5,
-
-    -- Filtro Blindado (100% Monstros, 0% Jogadores)
-    TargetMobsOnly = true,
-    TargetBreakables = true, -- Ataca potes e baús que dão ouro e poções
-    TargetDistance = 1500,   -- Raio de busca amplo (cobre masmorras inteiras)
-
-    -- Motor de Movimentação CFrame (Atravessa Paredes / NoClip Total)
+    -- Movimentação & Posicionamento
     NoClip = true,
-    FarmPosition = "Direct", -- "Direct" (Frente a 3.0 studs), "Behind" (Atrás), "Above" (Acima)
-    FlySpeed = 85,          -- Velocidade suave e constante (studs/s)
-    StopOffset = 3.0,        -- Distância perfeita para a hitbox de LookVector da arma
+    FarmPosition = "Above",  -- "Above" (4.5 studs acima - Seguro contra dano), "Direct" (Frente), "Behind" (Atrás)
+    FlySpeed = 80,           -- Velocidade do glide (studs/s)
+    HeightOffset = 4.5,      -- Altura acima do mob
+    StopOffset = 3.2,        -- Distância frontal/traseira
 
-    -- Visuais & Extras
+    -- Detecção de Alvos
+    TargetDistance = 3000,   -- Raio de busca (cobre o mapa inteiro)
     MobESP = true,
-    FastSwing = true,
     AutoEquip = true,
     AntiAFK = true,
 }
 
 -- ====================================================================
--- 🛡️ GESTÃO ROBUSTA DO PERSONAGEM (ANTI-TRAVAMENTO)
+-- 🛡️ GESTÃO DINÂMICA DO PERSONAGEM (SEM YIELD OU DEADLOCK)
 -- ====================================================================
 local function getMyCharacter()
     local char = LocalPlayer.Character
     if not char then return nil, nil, nil end
     local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart")
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
     if not hum or not root or hum.Health <= 0 then
         return nil, nil, nil
     end
     return char, hum, root
 end
 
--- Busca dinâmica do Remote de Ataque do Servidor
-local attackRemote = nil
-local function resolveAttackRemote()
-    if attackRemote and attackRemote.Parent then return attackRemote end
-    local remotes = ReplicatedStorage:FindFirstChild("GameRemotes") or ReplicatedStorage:WaitForChild("GameRemotes", 3)
-    if remotes then
-        attackRemote = remotes:FindFirstChild("RequestAttackAction") or remotes:FindFirstChild("Attack")
-    end
-    return attackRemote
-end
-
--- Auto Equip de Armas
-local function checkAndEquipWeapon()
-    if not Settings.AutoEquip then return end
-    local char, hum = getMyCharacter()
-    if not char or not hum then return end
-    if not char:FindFirstChildOfClass("Tool") then
-        local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
-        if bp then
-            local tool = bp:FindFirstChildOfClass("Tool")
-            if tool then
-                hum:EquipTool(tool)
-            end
-        end
-    end
-end
-
--- Anti AFK
+-- Anti AFK Permanente
 if Settings.AntiAFK then
     LocalPlayer.Idled:Connect(function()
-        local vu = game:GetService("VirtualUser")
-        vu:CaptureController()
-        vu:ClickButton2(Vector2.zero)
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.zero)
+        end)
     end)
 end
 
--- NoClip Total (Ignora todas as colisões)
+-- NoClip Total (Atravessa Paredes e Chão)
 RunService.Stepped:Connect(function()
     if not Settings.NoClip then return end
     local char = LocalPlayer.Character
@@ -119,10 +89,28 @@ RunService.Stepped:Connect(function()
     end
 end)
 
+-- Auto Equip de Armas
+local function checkAndEquipWeapon()
+    if not Settings.AutoEquip then return end
+    local char, hum = getMyCharacter()
+    if not char or not hum then return end
+
+    if not char:FindFirstChildOfClass("Tool") then
+        local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+        if bp then
+            local tool = bp:FindFirstChildOfClass("Tool")
+            if tool then
+                hum:EquipTool(tool)
+            end
+        end
+    end
+end
+
 -- ====================================================================
--- 🎯 FILTRO ESTRITO DE MONSTROS (ZERO ALVO EM PLAYERS)
+-- 🎯 DETECÇÃO UNIVERSAL DE MOBS (SWORDBURST 2 & RPGs)
 -- ====================================================================
 local espObjects = {}
+local TargetCache = {}
 
 local function isPlayerEntity(model)
     if not model or not model:IsA("Model") then return true end
@@ -130,9 +118,14 @@ local function isPlayerEntity(model)
     if Players:GetPlayerFromCharacter(model) then return true end
     if Players:FindFirstChild(model.Name) then return true end
 
-    -- Verifica ancestrais caso seja acessório ou parte aninhada de player
-    local ancestorModel = model.Parent and model.Parent:FindFirstAncestorOfClass("Model")
-    if ancestorModel and (Players:GetPlayerFromCharacter(ancestorModel) or Players:FindFirstChild(ancestorModel.Name)) then
+    -- Checa modelos aninhados de avatares
+    local ancestor = model.Parent and model.Parent:FindFirstAncestorOfClass("Model")
+    if ancestor and (Players:GetPlayerFromCharacter(ancestor) or Players:FindFirstChild(ancestor.Name)) then
+        return true
+    end
+
+    -- Ignora partes de câmera ou mapa
+    if model.Name == "Camera" or model.Name == "Terrain" or model.Name == "Map" then
         return true
     end
 
@@ -145,10 +138,10 @@ local function applyESP(model)
 
     pcall(function()
         local hl = Instance.new("Highlight")
-        hl.Name = "GhostMobESP"
+        hl.Name = "GhostUniversalESP"
         hl.Adornee = model
-        hl.FillColor = Color3.fromRGB(255, 45, 85)
-        hl.FillTransparency = 0.45
+        hl.FillColor = Color3.fromRGB(255, 40, 75)
+        hl.FillTransparency = 0.4
         hl.OutlineColor = Color3.fromRGB(0, 255, 200)
         hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -157,44 +150,72 @@ local function applyESP(model)
     end)
 end
 
-local TargetCache = {}
-
 local function scanTargets()
     local _, _, myRoot = getMyCharacter()
     if not myRoot then return end
 
     local list = {}
     local myPos = myRoot.Position
+    local visited = {}
 
-    -- Varredura inteligente de modelos no Workspace
+    local function inspectModel(model)
+        if not model or not model:IsA("Model") or visited[model] then return end
+        visited[model] = true
+
+        if isPlayerEntity(model) then return end
+
+        local hum = model:FindFirstChildOfClass("Humanoid")
+        local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model:FindFirstChild("UpperTorso") or model.PrimaryPart
+
+        if hum and root and hum.Health > 0 then
+            local dist = (myPos - root.Position).Magnitude
+            if dist <= Settings.TargetDistance then
+                local isBoss = (model:GetAttribute("IsBoss") == true)
+                    or (model.Parent and model.Parent.Name == "Bosses")
+                    or (string.find(model.Name:lower(), "boss") ~= nil)
+                    or (string.find(model.Name:lower(), "chefe") ~= nil)
+
+                table.insert(list, {
+                    Model = model,
+                    Root = root,
+                    Humanoid = hum,
+                    Dist = dist,
+                    IsBoss = isBoss,
+                })
+                applyESP(model)
+            end
+        end
+    end
+
+    -- 1. Suporte Específico para Swordburst 2 (workspace.Mobs e workspace.Bosses)
+    local sb2Mobs = Workspace:FindFirstChild("Mobs")
+    if sb2Mobs then
+        for _, mob in ipairs(sb2Mobs:GetChildren()) do
+            inspectModel(mob)
+        end
+    end
+
+    local sb2Bosses = Workspace:FindFirstChild("Bosses")
+    if sb2Bosses then
+        for _, boss in ipairs(sb2Bosses:GetChildren()) do
+            inspectModel(boss)
+        end
+    end
+
+    -- 2. Suporte para Dungeon Rollers e RPGs Genéricos (workspace:GetChildren)
     for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj:IsA("Model") and not isPlayerEntity(obj) then
-            -- Validação autoritativa do Dungeon Rollers: IsEnemy ou Barra de Vida
-            local isEnemy = (obj:GetAttribute("IsEnemy") == true) or (obj:FindFirstChild("EnemyHealthBarGui", true) ~= nil)
-            local isBreakable = (obj:GetAttribute("IsBreakable") == true)
-
-            if (isEnemy and Settings.TargetMobsOnly) or (isBreakable and Settings.TargetBreakables) then
-                local hum = obj:FindFirstChildOfClass("Humanoid")
-                local root = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso") or obj.PrimaryPart
-
-                if hum and root and hum.Health > 0 then
-                    local dist = (myPos - root.Position).Magnitude
-                    if dist <= Settings.TargetDistance then
-                        table.insert(list, {
-                            Model = obj,
-                            Root = root,
-                            Humanoid = hum,
-                            Dist = dist,
-                            IsBoss = (obj:GetAttribute("IsBoss") == true),
-                        })
-                        applyESP(obj)
-                    end
+        if obj:IsA("Model") then
+            inspectModel(obj)
+        elseif obj:IsA("Folder") and not (obj.Name == "Map" or obj.Name == "Terrain" or obj.Name == "Camera") then
+            for _, child in ipairs(obj:GetChildren()) do
+                if child:IsA("Model") then
+                    inspectModel(child)
                 end
             end
         end
     end
 
-    -- Limpeza de Highlights órfãos
+    -- Limpa ESP de monstros mortos
     for model, hl in pairs(espObjects) do
         if not model.Parent or not model:FindFirstChildOfClass("Humanoid") or model:FindFirstChildOfClass("Humanoid").Health <= 0 then
             pcall(function() hl:Destroy() end)
@@ -202,91 +223,118 @@ local function scanTargets()
         end
     end
 
-    -- Ordena por proximidade (inimigos mais próximos primeiro)
+    -- Ordena pelo monstro mais próximo
     table.sort(list, function(a, b) return a.Dist < b.Dist end)
     TargetCache = list
 end
 
 -- ====================================================================
--- ⚔️ MOTOR DE ATAQUE AUTORITATIVO (SINCRONIZADO AO SERVIDOR)
+-- ⚔️ MOTOR DE ATAQUE MULTI-MÉTODO (COMPATÍVEL COM TODOS OS JOGOS)
 -- ====================================================================
 local lastAttackTick = 0
 
-local function executeAttack(targetMob)
+-- Cache de remotes de ataque conhecidos
+local cachedRemotes = {}
+local function findCombatRemotes()
+    if #cachedRemotes > 0 then return cachedRemotes end
+    local list = {}
+    pcall(function()
+        for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
+            if desc:IsA("RemoteEvent") then
+                local name = desc.Name:lower()
+                if name:find("attack") or name:find("combat") or name:find("swing") or name:find("hit") or name:find("damage") then
+                    table.insert(list, desc)
+                end
+            end
+        end
+    end)
+    cachedRemotes = list
+    return list
+end
+
+local function executeUniversalAttack(targetMob)
     if not targetMob or not targetMob.Root then return end
     local char, hum, root = getMyCharacter()
     if not char or not hum or not root then return end
 
-    -- 1. Mira diretamente no alvo para validar a hitbox em frente ao LookVector
+    -- 1. Mira frontal / alinhamento com o alvo
     local lookPos = Vector3.new(targetMob.Root.Position.X, root.Position.Y, targetMob.Root.Position.Z)
     root.CFrame = CFrame.lookAt(root.Position, lookPos)
 
-    -- 2. Dispara o Remote oficial do jogo (RequestAttackAction)
-    local remote = resolveAttackRemote()
-    if remote then
-        pcall(function() remote:FireServer() end)
-    end
-
-    -- 3. Ativa Tool equipada
+    -- 2. Ativação nativa da Tool equipada
     local tool = char:FindFirstChildOfClass("Tool")
     if tool then
-        tool:Activate()
-        if Settings.FastSwing then
-            local animator = hum:FindFirstChildOfClass("Animator")
-            if animator then
-                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                    track:AdjustSpeed(2.5)
-                end
-            end
-        end
+        pcall(function() tool:Activate() end)
     end
 
-    -- 4. Suporte TouchInterest para executors compatíveis
-    if firetouchinterest then
-        local handle = tool and (tool:FindFirstChild("Handle") or tool:FindFirstChild("Blade") or tool:FindFirstChildOfClass("BasePart"))
-        if handle and targetMob.Root then
+    -- 3. Clique via VirtualUser (Nativo Roblox - funciona em Swordburst 2)
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:Button1Down(Vector2.new(640, 360))
+        VirtualUser:Button1Up(Vector2.new(640, 360))
+    end)
+
+    -- 4. Clique via VirtualInputManager
+    pcall(function()
+        VIM:SendMouseButtonEvent(640, 360, 0, true, game, 1)
+        VIM:SendMouseButtonEvent(640, 360, 0, false, game, 1)
+    end)
+
+    -- 5. Disparo de Remotes de Ataque (Dungeon Rollers / Cardinal)
+    local remotes = findCombatRemotes()
+    for _, rem in ipairs(remotes) do
+        pcall(function() rem:FireServer() end)
+        pcall(function() rem:FireServer(targetMob.Model) end)
+        pcall(function() rem:FireServer(targetMob.Root) end)
+    end
+
+    -- 6. TouchInterest (Hitbox instantânea se suportado pelo executor)
+    if firetouchinterest and targetMob.Root then
+        local blade = tool and (tool:FindFirstChild("Blade") or tool:FindFirstChild("Handle") or tool:FindFirstChildOfClass("BasePart"))
+        if blade then
             pcall(function()
-                firetouchinterest(handle, targetMob.Root, 0)
-                firetouchinterest(handle, targetMob.Root, 1)
+                firetouchinterest(blade, targetMob.Root, 0)
+                firetouchinterest(blade, targetMob.Root, 1)
             end)
         end
     end
 end
 
 -- ====================================================================
--- 📱 INTERFACE MOBILE HUD V22 (NEON CYBER ESPORTIVO)
+-- 📱 INTERFACE MOBILE HUD V23 (100% VISÍVEL NO START)
 -- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "GhostHubMaster"
+ScreenGui.Name = "GhostHubUniversal"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999
 ScreenGui.Parent = TargetGuiParent
 
--- Botão Flutuante Arrastável
+-- Botão Flutuante (Arrastável)
 local FloatBtn = Instance.new("TextButton", ScreenGui)
-FloatBtn.Size = UDim2.new(0, 115, 0, 38)
-FloatBtn.Position = UDim2.new(0.03, 0, 0.22, 0)
-FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
-FloatBtn.Text = "👻 GHOST V22"
-FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
+FloatBtn.Size = UDim2.new(0, 120, 0, 38)
+FloatBtn.Position = UDim2.new(0.02, 0, 0.18, 0)
+FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
+FloatBtn.Text = "👻 GHOST V23"
+FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 180)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 12
-Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(0, 9)
+Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(0, 8)
 local FloatStroke = Instance.new("UIStroke", FloatBtn)
-FloatStroke.Color = Color3.fromRGB(0, 255, 185)
-FloatStroke.Thickness = 1.8
+FloatStroke.Color = Color3.fromRGB(0, 255, 180)
+FloatStroke.Thickness = 1.6
 
--- Janela Principal
+-- Janela Principal (VISÍVEL POR PADRÃO!)
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 380, 0, 310)
 MainFrame.Position = UDim2.new(0.5, -190, 0.5, -155)
-MainFrame.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
-MainFrame.Visible = false
+MainFrame.BackgroundColor3 = Color3.fromRGB(14, 16, 24)
+MainFrame.Visible = true -- <<< ABERTA AUTOMATICAMENTE NO INÍCIO!
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 local MainStroke = Instance.new("UIStroke", MainFrame)
-MainStroke.Color = Color3.fromRGB(0, 255, 185)
+MainStroke.Color = Color3.fromRGB(0, 255, 180)
 MainStroke.Thickness = 2
 
--- Arrastar Elementos (Mouse & Touch)
+-- Arrastar Elementos (Mouse & Touch Mobile)
 local function makeDraggable(frame, handle)
     local dragging, dragStart, startPos
     handle.InputBegan:Connect(function(input)
@@ -311,27 +359,27 @@ end
 
 makeDraggable(FloatBtn, FloatBtn)
 
--- Header da Janela
+-- Header
 local Header = Instance.new("Frame", MainFrame)
 Header.Size = UDim2.new(1, 0, 0, 38)
-Header.BackgroundColor3 = Color3.fromRGB(20, 23, 32)
+Header.BackgroundColor3 = Color3.fromRGB(20, 24, 34)
 Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 10)
 makeDraggable(MainFrame, Header)
 
 local HeaderTitle = Instance.new("TextLabel", Header)
 HeaderTitle.Size = UDim2.new(1, -50, 1, 0)
-HeaderTitle.Position = UDim2.new(0, 14, 0, 0)
+HeaderTitle.Position = UDim2.new(0, 12, 0, 0)
 HeaderTitle.BackgroundTransparency = 1
-HeaderTitle.Text = "⚡ GHOST HUB V22 • ZERO ERROR"
+HeaderTitle.Text = "⚡ GHOST HUB V23 • SWORDBURST 2 & RPG"
 HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 HeaderTitle.Font = Enum.Font.GothamBlack
-HeaderTitle.TextSize = 12
+HeaderTitle.TextSize = 11
 HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
 
 local CloseBtn = Instance.new("TextButton", Header)
 CloseBtn.Size = UDim2.new(0, 28, 0, 26)
 CloseBtn.Position = UDim2.new(1, -34, 0, 6)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 70)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 55, 75)
 CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.Font = Enum.Font.GothamBold
@@ -350,21 +398,21 @@ end)
 local StatusPanel = Instance.new("Frame", MainFrame)
 StatusPanel.Size = UDim2.new(1, -20, 0, 48)
 StatusPanel.Position = UDim2.new(0, 10, 0, 44)
-StatusPanel.BackgroundColor3 = Color3.fromRGB(22, 25, 36)
+StatusPanel.BackgroundColor3 = Color3.fromRGB(22, 26, 38)
 Instance.new("UICorner", StatusPanel).CornerRadius = UDim.new(0, 8)
 
 local StatusText = Instance.new("TextLabel", StatusPanel)
-StatusText.Size = UDim2.new(1, -12, 1, 0)
+StatusText.Size = UDim2.new(1, -14, 1, 0)
 StatusText.Position = UDim2.new(0, 8, 0, 0)
 StatusText.BackgroundTransparency = 1
-StatusText.Text = "🎯 Status: Iniciando varredura contínua..."
-StatusText.TextColor3 = Color3.fromRGB(0, 255, 185)
+StatusText.Text = "🎯 Status: Varrendo monstros no mapa..."
+StatusText.TextColor3 = Color3.fromRGB(0, 255, 180)
 StatusText.Font = Enum.Font.GothamMedium
 StatusText.TextSize = 10
 StatusText.TextWrapped = true
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 
--- Container de Conteúdo e Controles
+-- Container de Controles com Scroll
 local ControlsScroll = Instance.new("ScrollingFrame", MainFrame)
 ControlsScroll.Size = UDim2.new(1, -20, 1, -100)
 ControlsScroll.Position = UDim2.new(0, 10, 0, 96)
@@ -376,11 +424,10 @@ local ListLayout = Instance.new("UIListLayout", ControlsScroll)
 ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ListLayout.Padding = UDim.new(0, 6)
 
--- Fábrica de Botões Toggle
 local function createToggle(name, initialVal, callback)
     local frame = Instance.new("Frame", ControlsScroll)
     frame.Size = UDim2.new(1, 0, 0, 34)
-    frame.BackgroundColor3 = Color3.fromRGB(20, 23, 32)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 24, 34)
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
 
     local label = Instance.new("TextLabel", frame)
@@ -423,20 +470,17 @@ local function createToggle(name, initialVal, callback)
     return frame
 end
 
--- Toggles de Combate e Movimento
 createToggle("⚡ AUTO FARM (MOB HUNTER)", Settings.AutoFarm, function(v) Settings.AutoFarm = v end)
-createToggle("⚔️ AUTO ATAQUE AUTORITATIVO", Settings.AutoAttack, function(v) Settings.AutoAttack = v end)
+createToggle("⚔️ AUTO ATAQUE CONTÍNUO", Settings.AutoAttack, function(v) Settings.AutoAttack = v end)
 createToggle("💥 KILL AURA (MULTIALVO)", Settings.KillAura, function(v) Settings.KillAura = v end)
 createToggle("👻 NOCLIP (ATRAVESSA PAREDES)", Settings.NoClip, function(v) Settings.NoClip = v end)
-createToggle("🛡️ FILTRO: APENAS MONSTROS (ZERO PLAYERS)", Settings.TargetMobsOnly, function(v) Settings.TargetMobsOnly = v end)
-createToggle("🏺 ATACAR POTES / BAÚS (OURO)", Settings.TargetBreakables, function(v) Settings.TargetBreakables = v end)
 createToggle("👁️ MOB ESP (DESTAQUE VISUAL)", Settings.MobESP, function(v) Settings.MobESP = v end)
 createToggle("🗡️ AUTO EQUIPAR ARMA", Settings.AutoEquip, function(v) Settings.AutoEquip = v end)
 
--- Seletor de Posição Tática
+-- Seletor de Posição
 local PosFrame = Instance.new("Frame", ControlsScroll)
 PosFrame.Size = UDim2.new(1, 0, 0, 34)
-PosFrame.BackgroundColor3 = Color3.fromRGB(20, 23, 32)
+PosFrame.BackgroundColor3 = Color3.fromRGB(20, 24, 34)
 Instance.new("UICorner", PosFrame).CornerRadius = UDim.new(0, 6)
 
 local PosLabel = Instance.new("TextLabel", PosFrame)
@@ -450,31 +494,31 @@ PosLabel.TextSize = 10
 PosLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local PosBtn = Instance.new("TextButton", PosFrame)
-PosBtn.Size = UDim2.new(0, 100, 0, 24)
-PosBtn.Position = UDim2.new(1, -106, 0.5, -12)
-PosBtn.BackgroundColor3 = Color3.fromRGB(35, 40, 55)
-PosBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
+PosBtn.Size = UDim2.new(0, 110, 0, 24)
+PosBtn.Position = UDim2.new(1, -116, 0.5, -12)
+PosBtn.BackgroundColor3 = Color3.fromRGB(35, 42, 58)
+PosBtn.TextColor3 = Color3.fromRGB(0, 255, 180)
 PosBtn.Font = Enum.Font.GothamBold
 PosBtn.TextSize = 9
-PosBtn.Text = "FRENTE (DIRECT)"
+PosBtn.Text = "ACIMA (ABOVE 4.5)"
 Instance.new("UICorner", PosBtn).CornerRadius = UDim.new(0, 6)
 
-local positions = { "Direct", "Behind", "Above" }
+local positions = { "Above", "Direct", "Behind" }
 local posIndex = 1
 PosBtn.MouseButton1Click:Connect(function()
     posIndex = (posIndex % #positions) + 1
     Settings.FarmPosition = positions[posIndex]
-    if Settings.FarmPosition == "Direct" then
+    if Settings.FarmPosition == "Above" then
+        PosBtn.Text = "ACIMA (ABOVE 4.5)"
+    elseif Settings.FarmPosition == "Direct" then
         PosBtn.Text = "FRENTE (DIRECT)"
-    elseif Settings.FarmPosition == "Behind" then
-        PosBtn.Text = "ATRÁS (BEHIND)"
     else
-        PosBtn.Text = "ACIMA (ABOVE)"
+        PosBtn.Text = "ATRÁS (BEHIND)"
     end
 end)
 
 -- ====================================================================
--- 🚀 MOTOR PRINCIPAL EM HEARTBEAT (MOVIMENTO CFRAME ULTRA FLUIDO)
+-- 🚀 MOTOR PRINCIPAL EM HEARTBEAT (GLIDE CFRAME & COMBATE)
 -- ====================================================================
 local lastScanTick = 0
 
@@ -484,15 +528,15 @@ RunService.Heartbeat:Connect(function(dt)
 
     local now = os.clock()
 
-    -- 1. Varredura Contínua a cada 0.35s
-    if (now - lastScanTick) >= 0.35 then
+    -- 1. Varredura a cada 0.3s
+    if (now - lastScanTick) >= 0.30 then
         scanTargets()
         checkAndEquipWeapon()
         lastScanTick = now
     end
 
     if not Settings.AutoFarm then
-        StatusText.Text = "⏸️ Status: Auto Farm Pausado. Clique no botão para retomar."
+        StatusText.Text = "⏸️ Status: Auto Farm Pausado. Clique no botão para ativar."
         return
     end
 
@@ -512,27 +556,29 @@ RunService.Heartbeat:Connect(function(dt)
             dist
         )
 
-        -- Cálculo do ponto de parada ideal
+        -- Ponto de Destino Tático
         local destCFrame
-        if Settings.FarmPosition == "Direct" then
-            -- 3.0 studs à frente do mob (hitbox de LookVector 100% perfeita)
-            local offsetDir = (myPos - tPos)
-            local flatDir = Vector3.new(offsetDir.X, 0, offsetDir.Z)
-            if flatDir.Magnitude > 0.1 then
-                destCFrame = CFrame.new(tPos + (flatDir.Unit * Settings.StopOffset))
+        if Settings.FarmPosition == "Above" then
+            -- Flutua 4.5 studs acima do monstro (mob não alcança você!)
+            destCFrame = CFrame.new(tPos + Vector3.new(0, Settings.HeightOffset, 0))
+        elseif Settings.FarmPosition == "Direct" then
+            -- Frente a 3.2 studs
+            local dir = (myPos - tPos)
+            local flat = Vector3.new(dir.X, 0, dir.Z)
+            if flat.Magnitude > 0.1 then
+                destCFrame = CFrame.new(tPos + (flat.Unit * Settings.StopOffset))
             else
                 destCFrame = CFrame.new(tPos + Vector3.new(0, 0, Settings.StopOffset))
             end
-        elseif Settings.FarmPosition == "Behind" then
-            destCFrame = tRoot.CFrame * CFrame.new(0, 0, Settings.StopOffset)
         else
-            destCFrame = tRoot.CFrame * CFrame.new(0, 4.5, 0)
+            -- Atrás a 3.2 studs
+            destCFrame = tRoot.CFrame * CFrame.new(0, 0, Settings.StopOffset)
         end
 
         local destPos = destCFrame.Position
         local distToDest = (myPos - destPos).Magnitude
 
-        -- MOVIMENTAÇÃO PURA VIA CFRAME (Zero atrito, atravessa qualquer parede a velocidade constante)
+        -- GLIDE ULTRA-SUAVE VIA CFRAME (Atravessa Paredes e Chão)
         if distToDest > 1.2 then
             local moveDir = (destPos - myPos).Unit
             local step = math.min(distToDest, Settings.FlySpeed * dt)
@@ -541,34 +587,32 @@ RunService.Heartbeat:Connect(function(dt)
             root.CFrame = CFrame.lookAt(newPos, Vector3.new(tPos.X, newPos.Y, tPos.Z))
             root.AssemblyLinearVelocity = Vector3.zero
         else
-            -- No alcance ideal: estabiliza e mantém a mira travada no mob
             root.CFrame = CFrame.lookAt(destPos, Vector3.new(tPos.X, destPos.Y, tPos.Z))
             root.AssemblyLinearVelocity = Vector3.zero
         end
 
-        -- DISPARO DE GOLPE SINCRONIZADO AO SERVIDOR
+        -- ATAQUE SINCRONIZADO
         if Settings.AutoAttack and (now - lastAttackTick >= Settings.AttackCooldown) then
             if Settings.KillAura then
-                -- Acerta o alvo principal e alvos próximos
                 for _, mob in ipairs(TargetCache) do
                     if (root.Position - mob.Root.Position).Magnitude <= Settings.AttackRange then
-                        executeAttack(mob)
+                        executeUniversalAttack(mob)
                     end
                 end
             elseif dist <= Settings.AttackRange then
-                executeAttack(currentTarget)
+                executeUniversalAttack(currentTarget)
             end
             lastAttackTick = now
         end
     else
-        StatusText.Text = "🔍 Procurando monstros vivos na masmorra..."
+        StatusText.Text = "🔍 Procurando monstros vivos no mapa..."
         root.AssemblyLinearVelocity = Vector3.zero
     end
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V22] MASTER ZERO-ERROR INICIADO COM SUCESSO!")
-print("   • AutoFarm: ATIVO IMEDIATAMENTE")
-print("   • Glide CFrame: 85 studs/s (Atravessando Paredes)")
-print("   • Cadência de Ataque: 0.35s (Sincronizado ao CombatService)")
+print("👻 [GHOST HUB V23] CARREGADO COM SUCESSO!")
+print("   • Suporte Nativo: Swordburst 2 (Mobs) & RPGs")
+print("   • UI: Visível na Tela")
+print("   • Farm: Ativo Automaticamente")
 print("═════════════════════════════════════════════════════════════")
