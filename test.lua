@@ -1,23 +1,22 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V31 [SWORDBURST 2 APEX - ZERO DAMAGE & PURE CODE GOD]
+    👻 GHOST HUB V32 [SWORDBURST 2 APEX - AUTO SERVER HOP & AUTO-RESTART]
     ══════════════════════════════════════════════════════════════════════
-    Construído com os métodos mais agressivos de Bluu, Oufguy & Ugly:
+    Novas funcionalidades integradas conforme solicitado:
+    ✔ Auto Server Hop (Buscador de Servidor Vazio):
+      - Consulta a API pública de servidores do Roblox e encontra servidores com 1 player.
+      - Pula de servidor automaticamente quando outro jogador entra (ou manualmente).
+    ✔ Reinício Automático Contínuo (queue_on_teleport):
+      - Registra o loadstring na memória do executor antes do teleporte.
+      - Ao nascer no novo servidor vazio, o script executa sozinho, abre o HUD e farma na hora!
     ✔ ZERO Cliques de Mouse / Cursor 100% Livre:
-      - Removido todo e qualquer VirtualInputManager.
-      - Ações executadas 100% via código direto (Remote Oficial + TouchInterest).
+      - 100% via código e rede (Combat Remote + Sword Skills Burst + TouchInterest).
     ✔ Modo Zero Dano / God Mode (Safe Back & Deep Offset - Estilo Bluu):
-      - Posiciona 12 studs atrás do mob e 5.5 studs abaixo do chão.
-      - O mob bate para frente no vazio (alcance de 8 studs), errando 100% dos golpes.
-      - Desync ativo (Animate.Parent = nil) que quebra o rastreio do mob.
-    ✔ Burst Agressivo de Skills (Estilo Oufguy):
-      - Dispara todas as habilidades de espada ('Downward Smash', 'Infinity Slash', etc.)
-        em sequência rápida sem engasgos.
-    ✔ Kill Aura Global do Mapa Inteiro:
-      - Envia o handshake de combate para até 30 mobs simultâneos por ciclo.
-    ✔ Invisibilidade Completa de Avatar e Espadas (Workspace.CharacterItems).
+      - 12 studs atrás das costas do mob e 5.5 studs debaixo da terra.
+    ✔ Desync de Animações (Animate.Parent = nil).
+    ✔ Invisibilidade Completa: Avatar e Espadas (Workspace.CharacterItems).
     ✔ Anti-Gravidade Absoluta (BodyVelocity 1e9) + Resgate Instantâneo Anti-Void.
-    ✔ 100% Luau Otimizado / Zero Webhooks / Sem interferência na tela.
+    ✔ Prioridade Menor Vida + Desempate por Distância.
 ]]
 
 local Players = game:GetService("Players")
@@ -26,9 +25,35 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+
+-- ====================================================================
+-- 🔄 REINÍCIO AUTOMÁTICO EM TELEPORTE (QUEUE_ON_TELEPORT)
+-- ====================================================================
+local queueTeleport = (syn and syn.queue_on_teleport)
+    or queue_on_teleport
+    or (fluxus and fluxus.queue_on_teleport)
+
+local LOADSTRING_URL = "loadstring(game:HttpGet('https://raw.githubusercontent.com/HenriMafra/TEST/main/test.lua'))()"
+
+local function queueAutoRestart()
+    if queueTeleport then
+        pcall(function()
+            queueTeleport(LOADSTRING_URL)
+        end)
+    end
+end
+
+-- Registra no evento oficial de teleporte da engine
+pcall(function()
+    LocalPlayer.OnTeleport:Connect(function(state)
+        queueAutoRestart()
+    end)
+end)
 
 -- Auto Login se estiver no menu inicial
 if game.PlaceId == 659222129 then
@@ -46,7 +71,7 @@ for _, name in ipairs({ "GhostHubApex", "GhostHubSB2", "GhostRadarGui" }) do
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V31 EXTREME)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V32)
 -- ====================================================================
 local Settings = {
     AutoFarm = true,          -- ATIVADO por padrão (caça e bate imediatamente!)
@@ -56,7 +81,8 @@ local Settings = {
     SafeBackDistance = 12.0,  -- Distância atrás das costas do mob (fora do golpe dele)
     Invisibility = true,      -- Personagem E ESPADAS transparentes/invisíveis
     Desync = true,            -- Desync de animações (estilo Bluu)
-    SoloOnly = false,         -- Desligado por padrão para funcionar em servidores públicos
+    AutoServerHop = false,    -- Pula automaticamente para servidor vazio se alguém entrar
+    SoloOnly = false,         -- Pausa se houver outro jogador no servidor atual
     KillAura = true,          -- Kill Aura multialvo
     MapWideAura = true,       -- Alcance do Kill Aura cobre o mapa inteiro
     AuraRange = 5000,         -- Raio em studs
@@ -96,6 +122,76 @@ local rng = Random.new()
 local function genKey()
     return string.format("%d%d%d", rng:NextInteger(1, 9), rng:NextInteger(1, 9), rng:NextInteger(1, 9))
 end
+
+-- ====================================================================
+-- 🌐 SISTEMA DE AUTO SERVER HOP (BUSCADOR DE SERVIDORES VAZIOS)
+-- ====================================================================
+local isHopping = false
+
+local function hopToEmptyServer(statusLabel)
+    if isHopping then return end
+    isHopping = true
+
+    queueAutoRestart()
+    if statusLabel then
+        statusLabel.Text = "🌐 Buscando servidor vazio na API oficial do Roblox..."
+    end
+
+    task.spawn(function()
+        local placeId = game.PlaceId
+        local success, response = pcall(function()
+            return game:HttpGet(string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId))
+        end)
+
+        if success and response then
+            local decoded = nil
+            pcall(function() decoded = HttpService:JSONDecode(response) end)
+            local data = decoded and decoded.data
+
+            if data and #data > 0 then
+                -- Ordena pelos servidores com MENOS jogadores
+                table.sort(data, function(a, b)
+                    return (a.playing or 99) < (b.playing or 99)
+                end)
+
+                for _, server in ipairs(data) do
+                    if server.id ~= game.JobId and server.playing and server.playing < (server.maxPlayers or 20) then
+                        if statusLabel then
+                            statusLabel.Text = string.format("🌐 Servidor vazio encontrado (%d players). Conectando...", server.playing)
+                        end
+                        queueAutoRestart()
+                        local tpOk, _ = pcall(function()
+                            TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+                        end)
+                        if tpOk then
+                            task.wait(8)
+                            return
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Fallback seguro
+        if statusLabel then
+            statusLabel.Text = "🌐 Conectando a novo servidor disponível..."
+        end
+        queueAutoRestart()
+        pcall(function()
+            TeleportService:Teleport(placeId, LocalPlayer)
+        end)
+        task.wait(8)
+        isHopping = false
+    end)
+end
+
+-- Monitor de novos jogadores para Server Hop automático
+Players.PlayerAdded:Connect(function(newPlayer)
+    if Settings.AutoServerHop and newPlayer ~= LocalPlayer then
+        task.wait(1.5)
+        hopToEmptyServer()
+    end
+end)
 
 -- ====================================================================
 -- 🗡️ GERENCIADOR DE LÂMINAS & HITBOX (CHARACTER ITEMS)
@@ -297,7 +393,7 @@ local function executeApexAttack(targetMob)
 end
 
 -- ====================================================================
--- 📱 INTERFACE MOBILE HUD APEX V31 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
+-- 📱 INTERFACE MOBILE HUD APEX V32 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
 -- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GhostHubApex"
@@ -346,7 +442,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST APEX V31 • ZERO DAMAGE GOD"
+Title.Text = "👻 GHOST APEX V32 • SERVER HOP GOD"
 Title.TextColor3 = Color3.fromRGB(0, 255, 185)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 11
@@ -438,6 +534,31 @@ local ListLayout = Instance.new("UIListLayout", ControlsScroll)
 ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ListLayout.Padding = UDim.new(0, 6)
 
+-- 🌐 BOTÃO DE PULAR P/ SERVIDOR VAZIO IMEDIATO
+local HopActionBtn = Instance.new("TextButton", ControlsScroll)
+HopActionBtn.Size = UDim2.new(1, 0, 0, 34)
+HopActionBtn.BackgroundColor3 = Color3.fromRGB(20, 35, 55)
+HopActionBtn.Text = "🌐 PULAR P/ SERVIDOR VAZIO AGORA"
+HopActionBtn.TextColor3 = Color3.fromRGB(100, 215, 255)
+HopActionBtn.Font = Enum.Font.GothamBold
+HopActionBtn.TextSize = 10
+HopActionBtn.Active = true
+Instance.new("UICorner", HopActionBtn).CornerRadius = UDim.new(0, 6)
+local HopStroke = Instance.new("UIStroke", HopActionBtn)
+HopStroke.Color = Color3.fromRGB(0, 170, 255)
+HopStroke.Thickness = 1.2
+
+local hopDebounce = false
+local function triggerHop()
+    if hopDebounce then return end
+    hopDebounce = true
+    hopToEmptyServer(StatusText)
+    task.wait(2)
+    hopDebounce = false
+end
+HopActionBtn.Activated:Connect(triggerHop)
+HopActionBtn.MouseButton1Click:Connect(triggerHop)
+
 -- Gerador de Toggles com suporte mobile 100% garantido (.Activated + debounced tap na linha inteira)
 local function createToggle(name, initialVal, callback)
     local frame = Instance.new("TextButton", ControlsScroll)
@@ -500,6 +621,7 @@ local function createToggle(name, initialVal, callback)
 end
 
 -- Toggles Solicitados
+createToggle("🌐 AUTO SERVER HOP (QUANDO ENTRAR GENTE)", Settings.AutoServerHop, function(v) Settings.AutoServerHop = v end)
 createToggle("🛡️ ZERO DANO (SAFE OFFSET BLUU)", Settings.GodModeDistance, function(v) Settings.GodModeDistance = v end)
 createToggle("🕳️ MODO SUBTERRÂNEO (ABAIXO DO CHÃO)", Settings.Underground, function(v) Settings.Underground = v end)
 createToggle("👻 INVISIBILIDADE (AVATAR & ESPADAS)", Settings.Invisibility, function(v) Settings.Invisibility = v end)
@@ -515,7 +637,7 @@ local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "👻 APEX V31"
+FloatBtn.Text = "👻 APEX V32"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -675,8 +797,16 @@ RunService.Heartbeat:Connect(function(dt)
         lastBladesTick = now
     end
 
-    -- 🛡️ CHECAGEM SOLO-ONLY: Se houver outro jogador no servidor E a opção estiver ativa, pausa
+    -- 🌐 AUTO SERVER HOP: Se configurado e outro jogador estiver no servidor, pula
     local otherPlayers = #Players:GetPlayers() - 1
+    if Settings.AutoServerHop and otherPlayers > 0 and not isHopping then
+        StatusText.Text = string.format("🌐 %d jogador(es) no servidor! Pulando para servidor vazio...", otherPlayers)
+        hopToEmptyServer(StatusText)
+        root.AssemblyLinearVelocity = Vector3.zero
+        return
+    end
+
+    -- 🛡️ CHECAGEM SOLO-ONLY: Se houver outro jogador no servidor E a opção estiver ativa, pausa
     if Settings.SoloOnly and otherPlayers > 0 then
         StatusText.Text = string.format(
             "🛡️ MODO SEGURO: %d outros jogadores no servidor!\n⏸️ Farm pausado por segurança.",
@@ -741,7 +871,7 @@ RunService.Heartbeat:Connect(function(dt)
             dist,
             mins, secs,
             Stats.MobsSlain,
-            otherPlayers == 0 and "SOLO" or string.format("%d Players", otherPlayers + 1),
+            otherPlayers == 0 and "SOLO (Vazio)" or string.format("%d Players", otherPlayers + 1),
             #myBlades
         )
 
@@ -797,11 +927,11 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V31 ZERO DAMAGE & PURE CODE] CARREGADO COM SUCESSO!")
-print("   • Zero Cliques de Mouse: 100% Código e Packet Direto")
-print("   • Modo Zero Dano: Offset Seguro 12 studs atrás & 5.5 studs subterrâneo")
-print("   • Desync de Animação Ativo (Animate.Parent = nil)")
-print("   • Burst Agressivo de Sword Skills (Estilo Oufguy)")
-print("   • Kill Aura Global: Até 30 alvos simultâneos")
+print("👻 [GHOST HUB V32 SERVER HOP GOD] CARREGADO COM SUCESSO!")
+print("   • Auto Server Hop & Low Player Seeker: ATIVOS")
+print("   • Reinício Automático (queue_on_teleport): ATIVO")
+print("   • Zero Cliques de Mouse / 100% Código: ATIVO")
+print("   • Modo Zero Dano (Offset Seguro 12 studs): ATIVO")
+print("   • Burst de Sword Skills: ATIVO")
 print("   • Invisibilidade Completa: Avatar + Espadas")
 print("═════════════════════════════════════════════════════════════")
