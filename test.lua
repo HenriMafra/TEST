@@ -27,6 +27,7 @@ local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local StatusText = nil
 
 -- ====================================================================
 -- 🔄 REINÍCIO AUTOMÁTICO EM TELEPORTE (QUEUE_ON_TELEPORT)
@@ -133,6 +134,7 @@ local function hopToEmptyServer(statusLabel)
     if isHopping then return end
     isHopping = true
 
+    statusLabel = statusLabel or StatusText
     queueAutoRestart()
     if statusLabel then
         statusLabel.Text = "🌐 Buscando servidor vazio na API oficial do Roblox..."
@@ -507,7 +509,7 @@ StatusPanel.Position = UDim2.new(0, 10, 0, 86)
 StatusPanel.BackgroundColor3 = Color3.fromRGB(16, 20, 30)
 Instance.new("UICorner", StatusPanel).CornerRadius = UDim.new(0, 8)
 
-local StatusText = Instance.new("TextLabel", StatusPanel)
+StatusText = Instance.new("TextLabel", StatusPanel)
 StatusText.Size = UDim2.new(1, -16, 1, 0)
 StatusText.Position = UDim2.new(0, 8, 0, 0)
 StatusText.BackgroundTransparency = 1
