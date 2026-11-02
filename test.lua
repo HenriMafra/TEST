@@ -14,16 +14,21 @@ if game.PlaceId == 659222129 then -- Main menu
     return
 end
 
-local queue_on_teleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
-if queue_on_teleport then
-    queue_on_teleport([[
-        if isfile('Bluu/Swordburst 2/autoexec') and readfile('Bluu/Swordburst 2/autoexec') == 'true' then
-            loadstring(game:HttpGet('https://raw.githubusercontent.com/HenriMafra/TEST/main/test.lua'))()
-        end
-    ]])
-end
+local SaveManager = nil
 
-local sendWebhook = function(...) end
+local queue_on_teleport = queue_on_teleport
+    or (syn and syn.queue_on_teleport)
+    or (fluxus and fluxus.queue_on_teleport)
+    or (getgenv and getgenv().queue_on_teleport)
+
+local function queueAutoRestart()
+    if queue_on_teleport then
+        pcall(function()
+            queue_on_teleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/HenriMafra/TEST/main/test.lua'))()")
+        end)
+    end
+end
+queueAutoRestart()
 
 local Players = game:GetService('Players')
 local LocalPlayer = Players.LocalPlayer
@@ -31,6 +36,19 @@ if not LocalPlayer then
     Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
     LocalPlayer = Players.LocalPlayer
 end
+
+pcall(function()
+    LocalPlayer.OnTeleport:Connect(function()
+        pcall(function()
+            if SaveManager and SaveManager.Save then
+                SaveManager:Save('auto_server_hop')
+            end
+        end)
+        queueAutoRestart()
+    end)
+end)
+
+local sendWebhook = function(...) end
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild('Humanoid')
 local HumanoidRootPart = Character:WaitForChild('HumanoidRootPart')
@@ -2070,7 +2088,17 @@ local isHopping = false
 local function hopToEmptyServer()
     if isHopping then return end
     isHopping = true
-    Library:Notify('Buscando novo servidor via TeleportService...', 5)
+    Library:Notify('Salvando estado e conectando a novo servidor...', 5)
+
+    if not Toggles.AutoResumeOnHop or Toggles.AutoResumeOnHop.Value then
+        pcall(function()
+            if SaveManager and SaveManager.Save then
+                SaveManager:Save('auto_server_hop')
+            end
+        end)
+    end
+
+    queueAutoRestart()
 
     task.spawn(function()
         local placeId = game.PlaceId
@@ -2084,6 +2112,7 @@ end
 
 ServerHopBox:AddToggle('AutoServerHop', { Text = 'Hop when player joins' })
 ServerHopBox:AddToggle('SoloOnly', { Text = 'Solo only (Hop if > 0 players)' })
+ServerHopBox:AddToggle('AutoResumeOnHop', { Text = 'Auto-resume features on hop', Default = true })
 ServerHopBox:AddButton({ Text = 'Hop to new server now', Func = hopToEmptyServer })
 
 Players.PlayerAdded:Connect(function(player)
@@ -3267,12 +3296,25 @@ ThemeManager:SetLibrary(Library)
 ThemeManager:SetFolder('Bluu/Swordburst 2')
 ThemeManager:ApplyToTab(Settings)
 
-local SaveManager = loadstring(game:HttpGet(UIRepo .. 'addons/SaveManager.lua'))()
+SaveManager = loadstring(game:HttpGet(UIRepo .. 'addons/SaveManager.lua'))()
 SaveManager:SetLibrary(Library)
 SaveManager:SetFolder('Bluu/Swordburst 2')
 SaveManager:IgnoreThemeSettings()
 SaveManager:BuildConfigSection(Settings)
 SaveManager:LoadAutoloadConfig()
+
+-- Restauração automática do servidor anterior (Auto-Resume on Hop)
+task.spawn(function()
+    task.wait(2)
+    pcall(function()
+        if SaveManager and SaveManager.Load and isfile and isfile('Bluu/Swordburst 2/settings/auto_server_hop.json') then
+            local ok, err = SaveManager:Load('auto_server_hop')
+            if ok then
+                Library:Notify('[Auto-Resume] Todas as funções do servidor anterior foram restauradas!', 6)
+            end
+        end
+    end)
+end)
 
 local Credits = Settings:AddRightGroupbox('Credits')
 
