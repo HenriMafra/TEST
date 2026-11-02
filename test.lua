@@ -2110,7 +2110,7 @@ local function hopToEmptyServer()
     end)
 end
 
-ServerHopBox:AddToggle('AutoServerHop', { Text = 'Hop when player joins' })
+ServerHopBox:AddToggle('AutoServerHop', { Text = 'Hop when player joins', Default = true })
 ServerHopBox:AddToggle('SoloOnly', { Text = 'Solo only (Hop if > 0 players)' })
 ServerHopBox:AddToggle('AutoResumeOnHop', { Text = 'Auto-resume features on hop', Default = true })
 ServerHopBox:AddButton({ Text = 'Hop to new server now', Func = hopToEmptyServer })
