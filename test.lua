@@ -144,7 +144,7 @@ local function hopToEmptyServer(statusLabel)
     task.spawn(function()
         local placeId = game.PlaceId
         local success, response = pcall(function()
-            return game:HttpGet(string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId))
+            return game:HttpGet(string.format("https://games.roproxy.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId))
         end)
 
         if success and response then
@@ -873,8 +873,8 @@ task.spawn(function()
             continue
         end
 
-        -- Checagem Auto Server Hop
-        if Settings.AutoServerHop and otherPlayers > 0 and not isHopping then
+        -- Checagem Auto Server Hop (com margem de 3s para o personagem carregar)
+        if Settings.AutoServerHop and (os.clock() - Stats.StartTime > 3.0) and otherPlayers > 0 and not isHopping then
             StatusText.Text = string.format("🌐 %d jogador(es) no servidor! Pulando para servidor vazio...", otherPlayers)
             hopToEmptyServer(StatusText)
             root.AssemblyLinearVelocity = Vector3.zero
