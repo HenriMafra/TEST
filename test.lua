@@ -98,18 +98,6 @@ local Stats = {
 local Event = ReplicatedStorage:WaitForChild("Event")
 local Function = ReplicatedStorage:WaitForChild("Function")
 
--- Obtém a Chave Dinâmica de RPC do Servidor (Método Nativo do Bluu)
-local RPCKey
-local function updateRPCKey()
-    pcall(function()
-        RPCKey = Function:InvokeServer("RPCKey", {})
-    end)
-    if not RPCKey or type(RPCKey) ~= "table" then
-        RPCKey = { "\204", "\214", "\177", "\251" }
-    end
-end
-updateRPCKey()
-
 -- Habilidades de Espada Oficiais
 local SwordSkillsList = {
     "Downward Smash",
@@ -120,23 +108,12 @@ local SwordSkillsList = {
     "Infinity Slash",
 }
 
-local rng = Random.new()
-local function genKey()
-    return string.format("%d%d%d", rng:NextInteger(1, 9), rng:NextInteger(1, 9), rng:NextInteger(1, 9))
-end
-
 local lastSkillTick = 0
 
 -- ====================================================================
--- 🌐 SISTEMA DE AUTO SERVER HOP (BUSCADOR DE SERVIDORES VAZIOS)
+-- 🌐 SISTEMA DE AUTO SERVER HOP (100% NATIVO ROBLOX - ZERO HTTP VIOLATION)
 -- ====================================================================
 local isHopping = false
-
-local httpRequest = (syn and syn.request)
-    or (http and http.request)
-    or http_request
-    or (fluxus and fluxus.request)
-    or request
 
 local function hopToEmptyServer(statusLabel)
     if isHopping then return end
@@ -145,54 +122,11 @@ local function hopToEmptyServer(statusLabel)
     statusLabel = statusLabel or StatusText
     queueAutoRestart()
     if statusLabel then
-        statusLabel.Text = "🌐 Buscando servidor vazio..."
+        statusLabel.Text = "🌐 Conectando a novo servidor via Teleport..."
     end
 
     task.spawn(function()
         local placeId = game.PlaceId
-
-        -- 1. Tenta buscar servidores via httpRequest nativo do executor (sem violar TrustCheck do Roblox)
-        if httpRequest then
-            local success, response = pcall(function()
-                return httpRequest({
-                    Url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId),
-                    Method = "GET"
-                })
-            end)
-
-            if success and response and response.Body then
-                local decoded = nil
-                pcall(function() decoded = HttpService:JSONDecode(response.Body) end)
-                local data = decoded and decoded.data
-
-                if data and #data > 0 then
-                    table.sort(data, function(a, b)
-                        return (a.playing or 99) < (b.playing or 99)
-                    end)
-
-                    for _, server in ipairs(data) do
-                        if server.id ~= game.JobId and server.playing and server.playing < (server.maxPlayers or 20) then
-                            if statusLabel then
-                                statusLabel.Text = string.format("🌐 Servidor vazio encontrado (%d players). Conectando...", server.playing)
-                            end
-                            queueAutoRestart()
-                            local tpOk, _ = pcall(function()
-                                TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
-                            end)
-                            if tpOk then
-                                task.wait(8)
-                                return
-                            end
-                        end
-                    end
-                end
-            end
-        end
-
-        -- 2. Fallback 100% Nativo Seguro (TeleportService direto sem chamadas web arriscadas)
-        if statusLabel then
-            statusLabel.Text = "🌐 Conectando a novo servidor disponível via Teleport..."
-        end
         queueAutoRestart()
         pcall(function()
             TeleportService:Teleport(placeId, LocalPlayer)
@@ -419,39 +353,26 @@ local RequiredServices = (function()
     return nil
 end)()
 
-local function dealDamage(target, skillName)
-    if not target or isDead(target) then return end
-    local mRoot = getMobRoot(target)
-
-    -- Protocolo 1: Internal Game Combat Service (quando suportado pelo executor)
+local dealDamage = (function()
     if RequiredServices and RequiredServices.Combat and RequiredServices.Combat.DealDamage then
+        return RequiredServices.Combat.DealDamage
+    end
+
+    local cachedRPCKey = nil
+    pcall(function()
+        cachedRPCKey = Function:InvokeServer('RPCKey', {})
+    end)
+    if not cachedRPCKey or type(cachedRPCKey) ~= 'table' then
+        cachedRPCKey = { "\204", "\214", "\177", "\251" }
+    end
+
+    return function(target, attackName)
+        if not target or isDead(target) then return end
         pcall(function()
-            RequiredServices.Combat.DealDamage(target, skillName)
+            Event:FireServer('Combat', cachedRPCKey, { 'Attack', target, attackName, '2' })
         end)
     end
-
-    -- Protocolo 2: Protocolo Bluu oficial (RPCKey dinâmico)
-    pcall(function()
-        Event:FireServer('Combat', RPCKey, { 'Attack', target, skillName, '2' })
-    end)
-
-    -- Protocolo 3: Protocolo Oufguy oficial (massFire)
-    pcall(function()
-        Event:FireServer('Combat', RPCKey, { 'Attack', skillName, target, genKey() })
-    end)
-
-    -- Protocolo 4: TouchInterest Instantâneo nas Lâminas
-    if firetouchinterest and mRoot and #myBlades > 0 then
-        for _, blade in ipairs(myBlades) do
-            if blade and blade.Parent then
-                pcall(function()
-                    firetouchinterest(blade, mRoot, 0)
-                    firetouchinterest(blade, mRoot, 1)
-                end)
-            end
-        end
-    end
-end
+end)()
 
 -- ====================================================================
 -- 📱 INTERFACE MOBILE HUD APEX V35 (TOUCH ULTRA-RESPONSIVO)
@@ -991,21 +912,9 @@ local function pulseGlobalKillAura()
     -- Dispara dano em TODOS os monstros vivos NO MESMO MILISSEGUNDO
     for _, item in ipairs(candidates) do
         local mob = item.model
-
-        -- 1. Remote Oficial SB2 (Bluu)
-        pcall(function()
-            Event:FireServer('Combat', RPCKey, { 'Attack', mob, nil, '2' })
-        end)
-
-        -- 2. Fallback Oufguy
-        pcall(function()
-            Event:FireServer('Combat', RPCKey, { 'Attack', nil, mob, genKey() })
-        end)
-
-        -- 3. Internal Game Combat Service (quando suportado)
-        if RequiredServices and RequiredServices.Combat and RequiredServices.Combat.DealDamage then
+        if mob and not isDead(mob) then
             pcall(function()
-                RequiredServices.Combat.DealDamage(mob, nil)
+                dealDamage(mob, nil)
             end)
         end
     end
@@ -1031,12 +940,11 @@ task.spawn(function()
     end
 end)
 
--- Atualização periódica de lâminas e chaves
+-- Atualização periódica de lâminas do personagem
 task.spawn(function()
     while true do
         task.wait(2)
         scanMyBlades()
-        updateRPCKey()
     end
 end)
 
