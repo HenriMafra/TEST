@@ -2140,13 +2140,67 @@ end)
 
 local ServerHopBox = Main:AddRightGroupbox('Server Hop')
 
+local HttpService = game:GetService('HttpService')
 local TeleportService = game:GetService('TeleportService')
 local isHopping = false
+
+pcall(function()
+    TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+        if player == LocalPlayer then
+            isHopping = false
+            Library:Notify(`Teleporte falhou: {tostring(errorMessage)}. Tentando novamente...`, 4)
+        end
+    end)
+end)
+
+local function getPublicServers(placeId, cursor)
+    local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId)
+    if cursor and cursor ~= '' and cursor ~= 'null' then
+        url = url .. "&cursor=" .. tostring(cursor)
+    end
+
+    local raw = nil
+
+    local httpRequest = (syn and syn.request)
+        or (http and http.request)
+        or http_request
+        or (fluxus and fluxus.request)
+        or request
+
+    if httpRequest then
+        local ok, res = pcall(function()
+            return httpRequest({ Url = url, Method = "GET" })
+        end)
+        if ok and res and res.Body then
+            raw = res.Body
+        end
+    end
+
+    if not raw then
+        local ok, res = pcall(function()
+            return game:HttpGet(url)
+        end)
+        if ok and res then
+            raw = res
+        end
+    end
+
+    if raw then
+        local ok, decoded = pcall(function()
+            return HttpService:JSONDecode(raw)
+        end)
+        if ok and decoded and decoded.data then
+            return decoded
+        end
+    end
+
+    return nil
+end
 
 local function hopToEmptyServer()
     if isHopping then return end
     isHopping = true
-    Library:Notify('Salvando estado e conectando a novo servidor...', 5)
+    Library:Notify('Buscando servidor diferente com menos jogadores...', 5)
 
     if not Toggles.AutoResumeOnHop or Toggles.AutoResumeOnHop.Value then
         pcall(function()
@@ -2160,10 +2214,93 @@ local function hopToEmptyServer()
 
     task.spawn(function()
         local placeId = game.PlaceId
-        pcall(function()
-            TeleportService:Teleport(placeId, LocalPlayer)
-        end)
-        task.wait(8)
+        local currentJobId = game.JobId
+        local cursor = nil
+        local candidates = {}
+        local pagesChecked = 0
+        local maxPages = 4
+
+        repeat
+            pagesChecked += 1
+            local serverData = getPublicServers(placeId, cursor)
+            if serverData and serverData.data then
+                for _, server in ipairs(serverData.data) do
+                    local sId = server.id
+                    local playing = server.playing or 0
+                    local maxPlayers = server.maxPlayers or 25
+                    -- Garante que NUNCA selecionará o mesmo servidor atual
+                    if (currentJobId == '' or sId ~= currentJobId) and playing < maxPlayers then
+                        table.insert(candidates, {
+                            id = sId,
+                            playing = playing,
+                            maxPlayers = maxPlayers
+                        })
+                    end
+                end
+                cursor = serverData.nextPageCursor
+            else
+                break
+            end
+
+            if #candidates >= 15 then break end
+            if cursor and cursor ~= 'null' and cursor ~= '' then
+                task.wait(0.2)
+            else
+                break
+            end
+        until pagesChecked >= maxPages or not cursor or cursor == 'null'
+
+        if #candidates > 0 then
+            -- Ordena do menor número de jogadores para o maior
+            table.sort(candidates, function(a, b)
+                return a.playing < b.playing
+            end)
+
+            -- Agrupa os melhores servidores (menor contagem de jogadores) e escolhe aleatoriamente entre eles para evitar colisões
+            local minCount = candidates[1].playing
+            local bestPool = {}
+            for _, c in ipairs(candidates) do
+                if c.playing <= minCount + 2 then
+                    table.insert(bestPool, c)
+                else
+                    break
+                end
+            end
+
+            -- Embaralha os melhores candidatos
+            local targetServer = bestPool[math.random(1, #bestPool)]
+            Library:Notify(string.format('Conectando a servidor com %d jogador(es)...', targetServer.playing), 5)
+            queueAutoRestart()
+
+            local teleported = false
+            pcall(function()
+                TeleportService:TeleportToPlaceInstance(placeId, targetServer.id, LocalPlayer)
+                teleported = true
+            end)
+
+            if teleported then
+                task.wait(7)
+                -- Se ainda estivermos aqui, tenta os demais candidatos
+                for _, alt in ipairs(candidates) do
+                    if alt.id ~= targetServer.id then
+                        Library:Notify(string.format('Tentando servidor alternativo (%d jogadores)...', alt.playing), 4)
+                        queueAutoRestart()
+                        pcall(function()
+                            TeleportService:TeleportToPlaceInstance(placeId, alt.id, LocalPlayer)
+                        end)
+                        task.wait(6)
+                    end
+                end
+            end
+        else
+            -- Se a lista da API não retornou outro servidor, usa o matchmaking nativo como fallback
+            Library:Notify('Nenhum servidor alternativo listado. Usando matchmaking...', 4)
+            pcall(function()
+                TeleportService:Teleport(placeId, LocalPlayer)
+            end)
+            task.wait(8)
+        end
+
         isHopping = false
     end)
 end
