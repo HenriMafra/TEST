@@ -1,19 +1,19 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V36 [SWORDBURST 2 APEX - SIMULTANEOUS KILL AURA & ZERO DAMAGE]
+    👻 GHOST HUB V37 [SWORDBURST 2 APEX - 100% MANUAL ACTIVATION & RECURSIVE MOB SCANNER]
     ══════════════════════════════════════════════════════════════════════
+    ✔ 100% MANUAL - Nada Inicia Ativado:
+      - A interface abre totalmente limpa e pausada.
+      - O jogador escolhe o que ligar (AutoFarm, KillAura, NoClip, etc.).
+    ✔ Varredura Recursiva Universal de Mobs:
+      - Detecta mobs diretos e agrupados em subpastas ou spawners de qualquer andar.
+      - Validação com base em Entity.Health.Value > 0 ou Humanoid.Health > 0.
     ✔ Kill Aura Simultâneo em Todos os Monstros ao Mesmo Tempo:
-      - Em cada pulso (0.10s), varre Workspace.Mobs e Workspace.Bosses.
-      - Dispara pacotes de ataque em lote para TODOS os mobs vivos no mesmo milissegundo.
+      - Dispara ataque em lote para TODOS os mobs vivos no mesmo milissegundo.
     ✔ Zero Dano Subterrâneo Profundo (-35 studs):
-      - Desce a 35 studs abaixo do monstro (completamente imune a golpes e AOEs terrestres).
-      - Seletor de profundidade touch no menu (-25, -35, -50 studs).
-    ✔ Ritmo de Ataque Contínuo e Fluido (Zero Engasgos):
-      - Removido o loop que travava com skills não aprendidas (evita penalty cooldown do servidor).
-      - Ataque constante e ininterrupto tanto no alvo focado quanto na aura global.
-    ✔ Prioridade Absoluta: Menor Vida (Lowest HP) e Desempate por Distância.
+      - 35 studs abaixo do mob (completamente imune a golpes e AOEs terrestres).
+    ✔ Ritmo de Ataque Contínuo e Fluido (Zero Engasgos / Zero Recovery Lock).
     ✔ ZERO Cliques de Mouse / ZERO Giro de Câmera (Controle Manual Livre).
-    ✔ Auto Server Hop + queue_on_teleport (Re-execução automática entre servidores).
 ]]
 
 local Players = game:GetService("Players")
@@ -68,20 +68,20 @@ for _, name in ipairs({ "GhostHubApex", "GhostHubSB2", "GhostRadarGui" }) do
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V36)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V37)
 -- ====================================================================
 local Settings = {
-    AutoFarm = true,          -- ATIVADO por padrão (caça e bate imediatamente!)
-    FarmDepth = 35.0,         -- Profundidade segura abaixo do mob (35 studs - ZERO DANO 100% GARANTIDO)
-    Invisibility = true,      -- Personagem E ESPADAS transparentes/invisíveis
-    Desync = true,            -- Desync de animações (estilo Bluu)
-    AutoServerHop = false,    -- Pula automaticamente para servidor vazio se alguém entrar
-    SoloOnly = false,         -- Pausa se houver outro jogador no servidor atual
-    KillAura = true,          -- Kill Aura multialvo simultâneo no mapa inteiro
-    SwordSkills = false,      -- Desativado por padrão para evitar travas de recovery
-    InfStamina = true,        -- 100% de estâmina ininterrupta
-    NoClip = true,            -- Atravessa chão, paredes e pedras
-    AutoDungeon = true,       -- Inicia masmorras automaticamente
+    AutoFarm = false,         -- DESLIGADO por padrão (o jogador decide quando ativar!)
+    FarmDepth = 35.0,         -- Profundidade segura abaixo do mob (-35 studs - ZERO DANO 100%)
+    Invisibility = false,     -- DESLIGADO por padrão
+    Desync = false,           -- DESLIGADO por padrão
+    AutoServerHop = false,    -- DESLIGADO por padrão
+    SoloOnly = false,         -- DESLIGADO por padrão
+    KillAura = false,         -- DESLIGADO por padrão
+    SwordSkills = false,      -- DESLIGADO por padrão
+    InfStamina = false,       -- DESLIGADO por padrão
+    NoClip = false,           -- DESLIGADO por padrão
+    AutoDungeon = false,      -- DESLIGADO por padrão
 
     FlySpeed = 450,           -- Velocidade máxima Bluu (studs/s)
 }
@@ -228,9 +228,9 @@ end
 -- 💀 DETECÇÃO E FILTRAGEM NATIVA DE MOBS (ESTILO EXATO DO BLUU)
 -- ====================================================================
 local function getMobRoot(mob)
-    if not mob or not mob:IsA("Model") then return nil end
+    if not mob then return nil end
     return mob:FindFirstChild("HumanoidRootPart")
-        or mob.PrimaryPart
+        or (mob:IsA("Model") and mob.PrimaryPart)
         or mob:FindFirstChild("Torso")
         or mob:FindFirstChild("UpperTorso")
         or mob:FindFirstChild("Head")
@@ -240,36 +240,94 @@ end
 
 local function isDead(mob)
     if not mob or not mob.Parent then return true end
-    local name = mob.Name:lower()
-    if name == "chests" or name == "chest" or name == "drops" or name == "spawners" or name == "portal" then
-        return true
-    end
-
     local entity = mob:FindFirstChild("Entity")
-    if entity and entity:FindFirstChild("Health") and entity.Health:IsA("ValueBase") then
-        if entity.Health.Value <= (entity.Health.MinValue or 0) then
-            return true
+    if entity and entity:FindFirstChild("Health") then
+        local hpVal = entity.Health.Value
+        if type(hpVal) == "number" and hpVal <= 0 then return true end
+        local hitLives = entity:FindFirstChild("HitLives")
+        if hitLives and hitLives.Value <= 0 then return true end
+        return false
+    end
+    local hum = mob:FindFirstChildOfClass("Humanoid")
+    if hum then
+        return hum.Health <= 0
+    end
+    return true
+end
+
+local function getAllCandidateMobs()
+    local candidates = {}
+    local myChar = LocalPlayer.Character
+
+    local function checkCandidate(obj)
+        if not obj or not obj.Parent then return end
+        if obj == myChar or Players:GetPlayerFromCharacter(obj) then return end
+
+        local name = obj.Name:lower()
+        if name == "chests" or name == "chest" or name == "drops" or name == "spawners" or name:find("portal") then
+            return
+        end
+
+        local entity = obj:FindFirstChild("Entity")
+        local hum = obj:FindFirstChildOfClass("Humanoid")
+        local hp = nil
+
+        if entity and entity:FindFirstChild("Health") then
+            local hpVal = entity.Health.Value
+            if type(hpVal) == "number" and hpVal > 0 then
+                local hitLives = entity:FindFirstChild("HitLives")
+                if not hitLives or hitLives.Value > 0 then
+                    hp = hpVal
+                end
+            end
+        elseif hum and hum.Health > 0 then
+            hp = hum.Health
+        end
+
+        if hp and hp > 0 then
+            local r = getMobRoot(obj)
+            if r then
+                table.insert(candidates, { model = obj, root = r, hp = hp })
+            end
         end
     end
 
-    local hum = mob:FindFirstChildOfClass("Humanoid")
-    if hum and hum.Health <= 0 then
-        return true
+    local Mobs = Workspace:FindFirstChild("Mobs") or Workspace:WaitForChild("Mobs", 2)
+    if Mobs then
+        for _, m in ipairs(Mobs:GetChildren()) do
+            checkCandidate(m)
+            if m:IsA("Folder") or (not m:FindFirstChild("Entity") and #m:GetChildren() > 0) then
+                for _, sub in ipairs(m:GetChildren()) do
+                    checkCandidate(sub)
+                end
+            end
+        end
     end
 
-    return false
+    local Bosses = Workspace:FindFirstChild("Bosses")
+    if Bosses then
+        for _, b in ipairs(Bosses:GetChildren()) do
+            checkCandidate(b)
+            if b:IsA("Folder") or (not b:FindFirstChild("Entity") and #b:GetChildren() > 0) then
+                for _, sub in ipairs(b:GetChildren()) do
+                    checkCandidate(sub)
+                end
+            end
+        end
+    end
+
+    return candidates
 end
 
 local function getNumericHP(m)
+    if not m then return 100 end
     local entity = m:FindFirstChild("Entity")
-    if entity then
-        local health = entity:FindFirstChild("Health")
-        if health and health:IsA("ValueBase") then
-            return health.Value
-        end
+    if entity and entity:FindFirstChild("Health") then
+        local hp = entity.Health.Value
+        if type(hp) == "number" then return hp end
     end
     local hum = m:FindFirstChildOfClass("Humanoid")
-    if hum then
+    if hum and type(hum.Health) == "number" then
         return hum.Health
     end
     return 100
@@ -282,36 +340,23 @@ local function getClosestTarget()
     if not root then return nil end
     local myPos = root.Position
 
-    local Mobs = Workspace:FindFirstChild("Mobs")
-    local Bosses = Workspace:FindFirstChild("Bosses")
+    local candidates = getAllCandidateMobs()
+    if #candidates == 0 then return nil end
 
     local bestTarget = nil
     local minHP = math.huge
     local minDist = math.huge
 
-    local function check(mob)
-        if not mob or isDead(mob) then return end
-        if Players:GetPlayerFromCharacter(mob) then return end
-
-        local mRoot = getMobRoot(mob)
-        if not mRoot then return end
-
-        local dist = (mRoot.Position - myPos).Magnitude
-        local hp = getNumericHP(mob)
+    for _, data in ipairs(candidates) do
+        local dist = (data.root.Position - myPos).Magnitude
+        local hp = data.hp
 
         -- Prioridade de menor vida; se igual, o mais próximo
         if hp < minHP or (math.abs(hp - minHP) < 1 and dist < minDist) then
             minHP = hp
             minDist = dist
-            bestTarget = mob
+            bestTarget = data.model
         end
-    end
-
-    if Mobs then
-        for _, m in ipairs(Mobs:GetChildren()) do check(m) end
-    end
-    if Bosses then
-        for _, b in ipairs(Bosses:GetChildren()) do check(b) end
     end
 
     return bestTarget
@@ -441,7 +486,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST APEX V36 • SIMULTANEOUS MAP KILL AURA"
+Title.Text = "👻 GHOST APEX V37 • MANUAL ENGINE & UNIVERSAL SCAN"
 Title.TextColor3 = Color3.fromRGB(0, 255, 185)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 10.5
@@ -465,15 +510,15 @@ CloseBtn.MouseButton1Click:Connect(closeMenu)
 local MasterFarmBtn = Instance.new("TextButton", Main)
 MasterFarmBtn.Size = UDim2.new(1, -20, 0, 36)
 MasterFarmBtn.Position = UDim2.new(0, 10, 0, 44)
-MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 110)
-MasterFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MasterFarmBtn.Text = "⏹️ PAUSAR AUTO-FARM (RODANDO)"
+MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+MasterFarmBtn.TextColor3 = Color3.fromRGB(200, 210, 225)
+MasterFarmBtn.Text = "▶️ INICIAR AUTO-FARM (PAUSADO)"
 MasterFarmBtn.Font = Enum.Font.GothamBold
 MasterFarmBtn.TextSize = 11
 MasterFarmBtn.Active = true
 Instance.new("UICorner", MasterFarmBtn).CornerRadius = UDim.new(0, 8)
 local MasterStroke = Instance.new("UIStroke", MasterFarmBtn)
-MasterStroke.Color = Color3.fromRGB(0, 255, 185)
+MasterStroke.Color = Color3.fromRGB(70, 80, 105)
 MasterStroke.Thickness = 1.5
 
 local function updateMasterVisual()
@@ -518,7 +563,7 @@ StatusText.Font = Enum.Font.GothamMedium
 StatusText.TextSize = 9.5
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.TextWrapped = true
-StatusText.Text = "🎯 Caçando monstros no mapa..."
+StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão acima ou ative o Kill Aura abaixo para começar!"
 
 -- Lista de Opções Rolável (Com AutomaticCanvasSize)
 local ControlsScroll = Instance.new("ScrollingFrame", Main)
@@ -669,7 +714,7 @@ local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "👻 APEX V36"
+FloatBtn.Text = "👻 APEX V37"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -906,30 +951,12 @@ local activeMobCount = 0
 local function pulseGlobalKillAura()
     if not Settings.KillAura then return end
 
-    local Mobs = Workspace:FindFirstChild("Mobs")
-    local Bosses = Workspace:FindFirstChild("Bosses")
-
-    local allMobs = {}
-    local function collect(folder)
-        if not folder then return end
-        for _, mob in ipairs(folder:GetChildren()) do
-            if not isDead(mob) then
-                local mRoot = getMobRoot(mob)
-                if mRoot then
-                    table.insert(allMobs, { model = mob, root = mRoot })
-                end
-            end
-        end
-    end
-
-    collect(Mobs)
-    collect(Bosses)
-    activeMobCount = #allMobs
-
+    local candidates = getAllCandidateMobs()
+    activeMobCount = #candidates
     if activeMobCount == 0 then return end
 
     -- Dispara dano em TODOS os monstros vivos NO MESMO MILISSEGUNDO
-    for _, item in ipairs(allMobs) do
+    for _, item in ipairs(candidates) do
         local mob = item.model
 
         -- 1. Remote Oficial SB2 (Bluu)
@@ -954,7 +981,7 @@ local function pulseGlobalKillAura()
     if firetouchinterest and #myBlades > 0 then
         local primaryBlade = myBlades[1]
         if primaryBlade and primaryBlade.Parent then
-            for _, item in ipairs(allMobs) do
+            for _, item in ipairs(candidates) do
                 pcall(function()
                     firetouchinterest(primaryBlade, item.root, 0)
                     firetouchinterest(primaryBlade, item.root, 1)
@@ -981,11 +1008,11 @@ task.spawn(function()
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V36 SIMULTANEOUS KILL AURA] CARREGADO COM SUCESSO!")
+print("👻 [GHOST HUB V37 MANUAL ENGINE] CARREGADO COM SUCESSO!")
+print("   • Status Inicial: 100% PAUSADO (O jogador ativa no menu)")
+print("   • Varredura: Recursiva Universal (Workspace.Mobs & Subpastas)")
 print("   • Kill Aura: DANO EM TODOS OS MOBS AO MESMO TEMPO (0.10s)")
-print("   • Zero Dano Subterrâneo: 35 studs abaixo do mob (Imune)")
-print("   • Foco Dinâmico: Monstro com Menor Vida Atual")
-print("   • Combate Fluido: Zero Engasgos / Zero Penalty Delays")
+print("   • Zero Dano Subterrâneo: -35 studs (Imune)")
 print("   • Zero Cliques de Mouse / Zero Giro de Câmera")
 print("   • Auto Server Hop + queue_on_teleport: ATIVO")
 print("═════════════════════════════════════════════════════════════")
