@@ -28,6 +28,7 @@ local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 local StatusText = nil
+local activeMobCount = 0
 
 -- ====================================================================
 -- 🔄 REINÍCIO AUTOMÁTICO EM TELEPORTE (QUEUE_ON_TELEPORT)
@@ -72,16 +73,16 @@ end
 -- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V37)
 -- ====================================================================
 local Settings = {
-    AutoFarm = true,          -- ATIVADO por padrão (Inicia caçando e batendo!)
+    AutoFarm = false,         -- 100% DESLIGADO (Inicia pausado, o jogador ativa quando quiser!)
     FarmDepth = 35.0,         -- Profundidade segura abaixo do mob (-35 studs - ZERO DANO 100%)
     Invisibility = false,     -- DESLIGADO por padrão
     Desync = false,           -- DESLIGADO por padrão
-    AutoServerHop = true,     -- ATIVADO: Sempre troca para servidor vazio se alguém entrar/houver players!
+    AutoServerHop = false,    -- DESLIGADO por padrão (o jogador ativa quando quiser!)
     SoloOnly = false,         -- DESLIGADO por padrão
-    KillAura = true,          -- ATIVADO: Dano em todos os mobs ao mesmo tempo!
+    KillAura = false,         -- DESLIGADO por padrão (o jogador ativa quando quiser!)
     SwordSkills = false,      -- DESLIGADO por padrão
-    InfStamina = true,        -- ATIVADO: Estâmina infinita 100%
-    NoClip = true,            -- ATIVADO: Permite descer aos -35 studs
+    InfStamina = false,       -- DESLIGADO por padrão
+    NoClip = false,           -- DESLIGADO por padrão
     AutoDungeon = false,      -- DESLIGADO por padrão
 
     FlySpeed = 450,           -- Velocidade máxima Bluu (studs/s)
@@ -131,6 +132,12 @@ local lastSkillTick = 0
 -- ====================================================================
 local isHopping = false
 
+local httpRequest = (syn and syn.request)
+    or (http and http.request)
+    or http_request
+    or (fluxus and fluxus.request)
+    or request
+
 local function hopToEmptyServer(statusLabel)
     if isHopping then return end
     isHopping = true
@@ -138,45 +145,53 @@ local function hopToEmptyServer(statusLabel)
     statusLabel = statusLabel or StatusText
     queueAutoRestart()
     if statusLabel then
-        statusLabel.Text = "🌐 Buscando servidor vazio na API oficial do Roblox..."
+        statusLabel.Text = "🌐 Buscando servidor vazio..."
     end
 
     task.spawn(function()
         local placeId = game.PlaceId
-        local success, response = pcall(function()
-            return game:HttpGet(string.format("https://games.roproxy.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId))
-        end)
 
-        if success and response then
-            local decoded = nil
-            pcall(function() decoded = HttpService:JSONDecode(response) end)
-            local data = decoded and decoded.data
+        -- 1. Tenta buscar servidores via httpRequest nativo do executor (sem violar TrustCheck do Roblox)
+        if httpRequest then
+            local success, response = pcall(function()
+                return httpRequest({
+                    Url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId),
+                    Method = "GET"
+                })
+            end)
 
-            if data and #data > 0 then
-                table.sort(data, function(a, b)
-                    return (a.playing or 99) < (b.playing or 99)
-                end)
+            if success and response and response.Body then
+                local decoded = nil
+                pcall(function() decoded = HttpService:JSONDecode(response.Body) end)
+                local data = decoded and decoded.data
 
-                for _, server in ipairs(data) do
-                    if server.id ~= game.JobId and server.playing and server.playing < (server.maxPlayers or 20) then
-                        if statusLabel then
-                            statusLabel.Text = string.format("🌐 Servidor vazio encontrado (%d players). Conectando...", server.playing)
-                        end
-                        queueAutoRestart()
-                        local tpOk, _ = pcall(function()
-                            TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
-                        end)
-                        if tpOk then
-                            task.wait(8)
-                            return
+                if data and #data > 0 then
+                    table.sort(data, function(a, b)
+                        return (a.playing or 99) < (b.playing or 99)
+                    end)
+
+                    for _, server in ipairs(data) do
+                        if server.id ~= game.JobId and server.playing and server.playing < (server.maxPlayers or 20) then
+                            if statusLabel then
+                                statusLabel.Text = string.format("🌐 Servidor vazio encontrado (%d players). Conectando...", server.playing)
+                            end
+                            queueAutoRestart()
+                            local tpOk, _ = pcall(function()
+                                TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+                            end)
+                            if tpOk then
+                                task.wait(8)
+                                return
+                            end
                         end
                     end
                 end
             end
         end
 
+        -- 2. Fallback 100% Nativo Seguro (TeleportService direto sem chamadas web arriscadas)
         if statusLabel then
-            statusLabel.Text = "🌐 Conectando a novo servidor disponível..."
+            statusLabel.Text = "🌐 Conectando a novo servidor disponível via Teleport..."
         end
         queueAutoRestart()
         pcall(function()
@@ -259,9 +274,10 @@ end
 local function getAllCandidateMobs()
     local candidates = {}
     local myChar = LocalPlayer.Character
+    local seen = {}
 
     local function checkCandidate(obj)
-        if not obj or not obj.Parent then return end
+        if not obj or not obj.Parent or seen[obj] then return end
         if obj == myChar or Players:GetPlayerFromCharacter(obj) then return end
 
         local name = obj.Name:lower()
@@ -288,34 +304,34 @@ local function getAllCandidateMobs()
         if hp and hp > 0 then
             local r = getMobRoot(obj)
             if r then
+                seen[obj] = true
                 table.insert(candidates, { model = obj, root = r, hp = hp })
             end
         end
     end
 
-    local Mobs = Workspace:FindFirstChild("Mobs") or Workspace:WaitForChild("Mobs", 2)
-    if Mobs then
-        for _, m in ipairs(Mobs:GetChildren()) do
-            checkCandidate(m)
-            if m:IsA("Folder") or (not m:FindFirstChild("Entity") and #m:GetChildren() > 0) then
-                for _, sub in ipairs(m:GetChildren()) do
+    local function scanHierarchy(parentObj)
+        if not parentObj then return end
+        for _, child in ipairs(parentObj:GetChildren()) do
+            checkCandidate(child)
+            if child:IsA("Folder") or (child:IsA("Model") and not child:FindFirstChild("Entity")) then
+                for _, sub in ipairs(child:GetChildren()) do
                     checkCandidate(sub)
+                    if sub:IsA("Folder") or (sub:IsA("Model") and not sub:FindFirstChild("Entity")) then
+                        for _, subsub in ipairs(sub:GetChildren()) do
+                            checkCandidate(subsub)
+                        end
+                    end
                 end
             end
         end
     end
 
+    local Mobs = Workspace:FindFirstChild("Mobs") or Workspace:WaitForChild("Mobs", 2)
+    if Mobs then scanHierarchy(Mobs) end
+
     local Bosses = Workspace:FindFirstChild("Bosses")
-    if Bosses then
-        for _, b in ipairs(Bosses:GetChildren()) do
-            checkCandidate(b)
-            if b:IsA("Folder") or (not b:FindFirstChild("Entity") and #b:GetChildren() > 0) then
-                for _, sub in ipairs(b:GetChildren()) do
-                    checkCandidate(sub)
-                end
-            end
-        end
-    end
+    if Bosses then scanHierarchy(Bosses) end
 
     return candidates
 end
@@ -511,15 +527,15 @@ CloseBtn.MouseButton1Click:Connect(closeMenu)
 local MasterFarmBtn = Instance.new("TextButton", Main)
 MasterFarmBtn.Size = UDim2.new(1, -20, 0, 36)
 MasterFarmBtn.Position = UDim2.new(0, 10, 0, 44)
-MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 110)
-MasterFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MasterFarmBtn.Text = "⏹️ PAUSAR AUTO-FARM (RODANDO)"
+MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
+MasterFarmBtn.TextColor3 = Color3.fromRGB(200, 210, 225)
+MasterFarmBtn.Text = "▶️ INICIAR AUTO-FARM (PAUSADO)"
 MasterFarmBtn.Font = Enum.Font.GothamBold
 MasterFarmBtn.TextSize = 11
 MasterFarmBtn.Active = true
 Instance.new("UICorner", MasterFarmBtn).CornerRadius = UDim.new(0, 8)
 local MasterStroke = Instance.new("UIStroke", MasterFarmBtn)
-MasterStroke.Color = Color3.fromRGB(0, 255, 185)
+MasterStroke.Color = Color3.fromRGB(70, 80, 105)
 MasterStroke.Thickness = 1.5
 
 local function updateMasterVisual()
@@ -535,6 +551,7 @@ local function updateMasterVisual()
         MasterStroke.Color = Color3.fromRGB(70, 80, 105)
     end
 end
+updateMasterVisual()
 
 local masterDebounce = false
 local function toggleMasterFarm()
@@ -564,7 +581,7 @@ StatusText.Font = Enum.Font.GothamMedium
 StatusText.TextSize = 9.5
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.TextWrapped = true
-StatusText.Text = "🎯 Auto-Farm e Auto Server Hop ATIVADOS! Caçando monstros ou pulando se houver players..."
+StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão acima ou ative o Kill Aura abaixo para começar!"
 
 -- Lista de Opções Rolável (Com AutomaticCanvasSize)
 local ControlsScroll = Instance.new("ScrollingFrame", Main)
@@ -782,8 +799,8 @@ RunService.Stepped:Connect(function()
         pcall(function() Event:FireServer("Actions", { "Sprint", "Disabled" }) end)
     end
 
-    -- NoClip: Apenas se AutoFarm estiver ATIVO
-    if Settings.NoClip and Settings.AutoFarm then
+    -- NoClip: Ativo quando a opção está ligada OU enquanto o AutoFarm estiver ativo
+    if Settings.NoClip or Settings.AutoFarm then
         for _, p in ipairs(char:GetDescendants()) do
             if p:IsA("BasePart") then
                 p.CanCollide = false
@@ -838,7 +855,9 @@ task.spawn(function()
         local deltaTime = task.wait()
 
         if not Settings.AutoFarm then
-            StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão verde acima para iniciar a caçada!"
+            if StatusText then
+                StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão acima ou ative o Kill Aura abaixo para começar!"
+            end
             local c = LocalPlayer.Character
             if c then
                 local r = c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("Torso")
@@ -850,96 +869,109 @@ task.spawn(function()
             continue
         end
 
-        local char = LocalPlayer.Character
-        if not char then continue end
-        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
-        if not root then continue end
+        local loopOk, loopErr = pcall(function()
+            local char = LocalPlayer.Character
+            if not char then return end
+            local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+            if not root then return end
 
-        -- Anti-Gravidade ativa
-        local bv = root:FindFirstChild("ApexAntiGrav")
-        if not bv then
-            bv = Instance.new("BodyVelocity")
-            bv.Name = "ApexAntiGrav"
-            bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
-            bv.Velocity = Vector3.zero
-            bv.Parent = root
-        end
-
-        -- Checagem Solo-Only
-        local otherPlayers = #Players:GetPlayers() - 1
-        if Settings.SoloOnly and otherPlayers > 0 then
-            StatusText.Text = string.format("🛡️ MODO SEGURO: %d outro(s) jogador(es) no servidor!\n⏸️ Farm pausado por segurança.", otherPlayers)
-            root.AssemblyLinearVelocity = Vector3.zero
-            continue
-        end
-
-        -- Checagem Auto Server Hop (com margem de 3s para o personagem carregar)
-        if Settings.AutoServerHop and (os.clock() - Stats.StartTime > 3.0) and otherPlayers > 0 and not isHopping then
-            StatusText.Text = string.format("🌐 %d jogador(es) no servidor! Pulando para servidor vazio...", otherPlayers)
-            hopToEmptyServer(StatusText)
-            root.AssemblyLinearVelocity = Vector3.zero
-            continue
-        end
-
-        -- Busca o monstro com menor vida
-        local target = getClosestTarget()
-        if not target or isDead(target) then
-            StatusText.Text = "🔍 Procurando próximo monstro vivo com menor vida..."
-            root.AssemblyLinearVelocity = Vector3.zero
-            continue
-        end
-
-        local mobRoot = getMobRoot(target)
-        if not mobRoot then continue end
-
-        -- 🕳️ Posicionamento seguro 35 studs abaixo do mob (Zero Dano Garantido)
-        local targetPos = mobRoot.Position + Vector3.new(0, -Settings.FarmDepth, 0)
-        local myPos = root.Position
-        local toTarget = targetPos - myPos
-        local totalDist = toTarget.Magnitude
-
-        local hpNum = getNumericHP(target)
-        StatusText.Text = string.format(
-            "🎯 Foco Menor Vida: %s (%d HP)\n📏 Dist: %.1f studs | ⚔️ Abatidos: %d\n🛡️ Zero Dano: -%.1f studs (Subterrâneo 100%% Seguro)\n💥 Kill Aura Geral: %d mobs atingidos AO MESMO TEMPO!\n👥 Servidor: %s",
-            target.Name,
-            math.floor(hpNum),
-            totalDist,
-            Stats.MobsSlain,
-            Settings.FarmDepth,
-            activeMobCount,
-            otherPlayers == 0 and "SOLO (Vazio)" or string.format("%d Players", otherPlayers + 1)
-        )
-
-        -- ⚡ Movimento CFrame Relativo Exato do Bluu
-        if totalDist > 0.5 then
-            root.CFrame += Vector3.new(0, toTarget.Y, 0)
-            local horiz = Vector3.new(toTarget.X, 0, toTarget.Z)
-            if horiz.Magnitude > 0 then
-                local moveDir = horiz.Unit
-                local alpha = math.clamp(deltaTime * Settings.FlySpeed / horiz.Magnitude, 0, 1)
-                root.CFrame += moveDir * horiz.Magnitude * alpha
+            -- Anti-Gravidade ativa
+            local bv = root:FindFirstChild("ApexAntiGrav")
+            if not bv then
+                bv = Instance.new("BodyVelocity")
+                bv.Name = "ApexAntiGrav"
+                bv.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+                bv.Velocity = Vector3.zero
+                bv.Parent = root
             end
-            root.AssemblyLinearVelocity = Vector3.zero
-        end
 
-        -- 💥 Ataque contínuo limpo e direto ao alvo focado
-        dealDamage(target, nil)
-
-        -- 🗡️ Habilidade inteligente (se ativada, sem travar o combate)
-        if Settings.SwordSkills then
-            local now = os.clock()
-            if now - lastSkillTick > 2.0 then
-                lastSkillTick = now
-                pcall(function()
-                    Event:FireServer('Skills', { 'UseSkill', 'Sweeping Strike', { Direction = Vector3.zero } })
-                end)
-                dealDamage(target, 'Sweeping Strike')
+            -- Checagem Solo-Only
+            local otherPlayers = #Players:GetPlayers() - 1
+            if Settings.SoloOnly and otherPlayers > 0 then
+                if StatusText then
+                    StatusText.Text = string.format("🛡️ MODO SEGURO: %d outro(s) jogador(es) no servidor!\n⏸️ Farm pausado por segurança.", otherPlayers)
+                end
+                root.AssemblyLinearVelocity = Vector3.zero
+                return
             end
-        end
 
-        -- Avança estatística quando o mob morre
-        if isDead(target) then
-            Stats.MobsSlain = Stats.MobsSlain + 1
+            -- Checagem Auto Server Hop (com margem de 3s para o personagem carregar)
+            if Settings.AutoServerHop and (os.clock() - Stats.StartTime > 3.0) and otherPlayers > 0 and not isHopping then
+                if StatusText then
+                    StatusText.Text = string.format("🌐 %d jogador(es) no servidor! Pulando para servidor vazio...", otherPlayers)
+                end
+                hopToEmptyServer(StatusText)
+                root.AssemblyLinearVelocity = Vector3.zero
+                return
+            end
+
+            -- Busca o monstro com menor vida
+            local target = getClosestTarget()
+            if not target or isDead(target) then
+                if StatusText then
+                    StatusText.Text = "🔍 Procurando próximo monstro vivo com menor vida..."
+                end
+                root.AssemblyLinearVelocity = Vector3.zero
+                return
+            end
+
+            local mobRoot = getMobRoot(target)
+            if not mobRoot then return end
+
+            -- 🕳️ Posicionamento seguro 35 studs abaixo do mob (Zero Dano Garantido)
+            local targetPos = mobRoot.Position + Vector3.new(0, -Settings.FarmDepth, 0)
+            local myPos = root.Position
+            local toTarget = targetPos - myPos
+            local totalDist = toTarget.Magnitude
+
+            local hpNum = getNumericHP(target)
+            if StatusText then
+                StatusText.Text = string.format(
+                    "🎯 Foco Menor Vida: %s (%d HP)\n📏 Dist: %.1f studs | ⚔️ Abatidos: %d\n🛡️ Zero Dano: -%.1f studs (Subterrâneo 100%% Seguro)\n💥 Kill Aura Geral: %d mobs atingidos AO MESMO TEMPO!\n👥 Servidor: %s",
+                    tostring(target and target.Name or "Monstro"),
+                    math.floor(hpNum or 0),
+                    totalDist or 0,
+                    Stats.MobsSlain or 0,
+                    Settings.FarmDepth or 35.0,
+                    activeMobCount or 0,
+                    otherPlayers == 0 and "SOLO (Vazio)" or string.format("%d Players", otherPlayers + 1)
+                )
+            end
+
+            -- ⚡ Movimento CFrame Relativo Exato do Bluu
+            if totalDist > 0.5 then
+                root.CFrame = root.CFrame + Vector3.new(0, toTarget.Y, 0)
+                local horiz = Vector3.new(toTarget.X, 0, toTarget.Z)
+                if horiz.Magnitude > 0 then
+                    local moveDir = horiz.Unit
+                    local alpha = math.clamp(deltaTime * Settings.FlySpeed / horiz.Magnitude, 0, 1)
+                    root.CFrame = root.CFrame + (moveDir * horiz.Magnitude * alpha)
+                end
+                root.AssemblyLinearVelocity = Vector3.zero
+            end
+
+            -- 💥 Ataque contínuo limpo e direto ao alvo focado
+            dealDamage(target, nil)
+
+            -- 🗡️ Habilidade inteligente (se ativada, sem travar o combate)
+            if Settings.SwordSkills then
+                local now = os.clock()
+                if now - lastSkillTick > 2.0 then
+                    lastSkillTick = now
+                    pcall(function()
+                        Event:FireServer('Skills', { 'UseSkill', 'Sweeping Strike', { Direction = Vector3.zero } })
+                    end)
+                    dealDamage(target, 'Sweeping Strike')
+                end
+            end
+
+            -- Avança estatística quando o mob morre
+            if isDead(target) then
+                Stats.MobsSlain = Stats.MobsSlain + 1
+            end
+        end)
+        if not loopOk and loopErr then
+            -- Previne encerramento da thread
         end
     end
 end)
@@ -947,7 +979,7 @@ end)
 -- ====================================================================
 -- 💥 KILL AURA MULTIALVO SIMULTÂNEO (DANO EM TODOS OS MOBS AO MESMO TEMPO)
 -- ====================================================================
-local activeMobCount = 0
+activeMobCount = 0
 
 local function pulseGlobalKillAura()
     if not Settings.KillAura then return end
@@ -995,7 +1027,7 @@ end
 task.spawn(function()
     while true do
         task.wait(0.10)
-        pulseGlobalKillAura()
+        pcall(pulseGlobalKillAura)
     end
 end)
 
