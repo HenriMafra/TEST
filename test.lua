@@ -1,22 +1,21 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V32 [SWORDBURST 2 APEX - AUTO SERVER HOP & AUTO-RESTART]
+    👻 GHOST HUB V33 [SWORDBURST 2 APEX - ANTI-SPIN & ANTI-VOID GUARDIAN]
     ══════════════════════════════════════════════════════════════════════
-    Novas funcionalidades integradas conforme solicitado:
-    ✔ Auto Server Hop (Buscador de Servidor Vazio):
-      - Consulta a API pública de servidores do Roblox e encontra servidores com 1 player.
-      - Pula de servidor automaticamente quando outro jogador entra (ou manualmente).
-    ✔ Reinício Automático Contínuo (queue_on_teleport):
-      - Registra o loadstring na memória do executor antes do teleporte.
-      - Ao nascer no novo servidor vazio, o script executa sozinho, abre o HUD e farma na hora!
-    ✔ ZERO Cliques de Mouse / Cursor 100% Livre:
-      - 100% via código e rede (Combat Remote + Sword Skills Burst + TouchInterest).
-    ✔ Modo Zero Dano / God Mode (Safe Back & Deep Offset - Estilo Bluu):
-      - 12 studs atrás das costas do mob e 5.5 studs debaixo da terra.
-    ✔ Desync de Animações (Animate.Parent = nil).
+    Correções Críticas de Câmera, Rotação e Void:
+    ✔ ZERO Giro de Câmera:
+      - Removido qualquer sequestro de Camera.CFrame. Sua câmera é 100% livre!
+      - Eliminado o Gimbal Lock de CFrame.lookAt vertical que causava giros violentos.
+    ✔ Guardião Anti-Void Absoluto:
+      - Resgata o boneco instantaneamente caso caia abaixo de Y = -35.
+      - Validação estrita de Mobs: NUNCA mira em baús, decorações ou entidades caídas no void.
+    ✔ Posicionamento Subterrâneo Estável (Zero Feedback Loop):
+      - Posição subterrânea fixa sem orbitar o mob dinamicamente.
+      - 6.0 studs abaixo do chão: os ataques do mob passam por cima no vazio (Zero Dano).
+    ✔ Auto Server Hop (Buscador de Servidor Vazio) + Reinício Automático (queue_on_teleport).
+    ✔ 100% Via Código: Zero cliques de mouse, tela totalmente livre.
+    ✔ Burst Agressivo de Sword Skills (Estilo Oufguy massFire).
     ✔ Invisibilidade Completa: Avatar e Espadas (Workspace.CharacterItems).
-    ✔ Anti-Gravidade Absoluta (BodyVelocity 1e9) + Resgate Instantâneo Anti-Void.
-    ✔ Prioridade Menor Vida + Desempate por Distância.
 ]]
 
 local Players = game:GetService("Players")
@@ -48,7 +47,6 @@ local function queueAutoRestart()
     end
 end
 
--- Registra no evento oficial de teleporte da engine
 pcall(function()
     LocalPlayer.OnTeleport:Connect(function(state)
         queueAutoRestart()
@@ -71,14 +69,12 @@ for _, name in ipairs({ "GhostHubApex", "GhostHubSB2", "GhostRadarGui" }) do
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V32)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V33)
 -- ====================================================================
 local Settings = {
     AutoFarm = true,          -- ATIVADO por padrão (caça e bate imediatamente!)
     Underground = true,       -- Farma debaixo da terra (100% abaixo do piso)
-    GodModeDistance = true,   -- Posiciona atrás/abaixo do mob (Zero Dano dos mobs!)
-    FarmDepth = 5.5,          -- Profundidade abaixo da SOLA DOS PÉS do mob (studs)
-    SafeBackDistance = 12.0,  -- Distância atrás das costas do mob (fora do golpe dele)
+    FarmDepth = 6.0,          -- Profundidade segura abaixo do mob (studs)
     Invisibility = true,      -- Personagem E ESPADAS transparentes/invisíveis
     Desync = true,            -- Desync de animações (estilo Bluu)
     AutoServerHop = false,    -- Pula automaticamente para servidor vazio se alguém entrar
@@ -91,7 +87,6 @@ local Settings = {
     InfStamina = true,        -- 100% de estâmina ininterrupta
     NoClip = true,            -- Atravessa chão, paredes e pedras
     AutoDungeon = true,       -- Inicia masmorras automaticamente
-    MobESP = true,            -- Destaque visual dos monstros
 
     FlySpeed = 340,           -- Velocidade máxima de deslocamento CFrame (studs/s)
     AttackCooldown = 0.10,    -- Frequência de ataque ultra-rápida (10 ataques por segundo)
@@ -149,7 +144,6 @@ local function hopToEmptyServer(statusLabel)
             local data = decoded and decoded.data
 
             if data and #data > 0 then
-                -- Ordena pelos servidores com MENOS jogadores
                 table.sort(data, function(a, b)
                     return (a.playing or 99) < (b.playing or 99)
                 end)
@@ -172,7 +166,6 @@ local function hopToEmptyServer(statusLabel)
             end
         end
 
-        -- Fallback seguro
         if statusLabel then
             statusLabel.Text = "🌐 Conectando a novo servidor disponível..."
         end
@@ -185,7 +178,6 @@ local function hopToEmptyServer(statusLabel)
     end)
 end
 
--- Monitor de novos jogadores para Server Hop automático
 Players.PlayerAdded:Connect(function(newPlayer)
     if Settings.AutoServerHop and newPlayer ~= LocalPlayer then
         task.wait(1.5)
@@ -217,7 +209,6 @@ local function scanMyBlades()
         end
     end
 
-    -- Fallback nas armas dentro do próprio personagem
     local char = LocalPlayer.Character
     if char then
         for _, p in ipairs(char:GetDescendants()) do
@@ -230,39 +221,48 @@ local function scanMyBlades()
 end
 
 -- ====================================================================
--- 💀 DETECÇÃO E FILTRAGEM AVANÇADA DE MOBS
+-- 💀 VALIDAÇÃO ESTRITA DE MOBS (ZERO BUGS DE BAÚS E VOID)
 -- ====================================================================
-local function isMobDead(mob)
-    if not mob or not mob.Parent then return true end
+local function isValidMob(mob)
+    if not mob or not mob:IsA("Model") or not mob.Parent then return false end
+    if Players:GetPlayerFromCharacter(mob) then return false end
 
-    -- Checagem oficial de Swordburst 2 via Entity.Health
+    -- Verifica se tem root part válido no mundo (não no void)
+    local root = mob:FindFirstChild("HumanoidRootPart")
+        or mob.PrimaryPart
+        or mob:FindFirstChild("Torso")
+        or mob:FindFirstChild("UpperTorso")
+    if not root then return false end
+
+    -- Descarta se estiver no void ou em coordenadas inválidas
+    local pos = root.Position
+    if pos.Y < -35 or pos.Y > 2500 or pos.Magnitude > 12000 then return false end
+
+    -- Mobs vivos de Swordburst 2 possuem Entity com Health positivo
     local entity = mob:FindFirstChild("Entity")
-    if entity and entity:FindFirstChild("Health") and entity.Health:IsA("ValueBase") then
-        local hpVal = entity.Health.Value
-        local minVal = entity.Health.MinValue or 0
-        if hpVal <= minVal then return true end
-    end
+    if not entity then return false end
 
-    -- Checagem via Humanoid clássico
-    local hum = mob:FindFirstChildOfClass("Humanoid")
-    if hum and hum.Health <= 0 then return true end
+    local health = entity:FindFirstChild("Health")
+    if not health or not health:IsA("ValueBase") then return false end
 
-    return false
+    local minVal = health.MinValue or 0
+    if health.Value <= minVal then return false end
+
+    local hitLives = entity:FindFirstChild("HitLives")
+    if hitLives and hitLives:IsA("ValueBase") and hitLives.Value <= 0 then return false end
+
+    return true
 end
 
--- Obtém o valor numérico de vida para cálculo e ordenação
+local function isMobDead(mob)
+    return not isValidMob(mob)
+end
+
 local function getNumericHP(mob)
-    if not mob or not mob.Parent then return 9999999 end
+    if not isValidMob(mob) then return 9999999 end
     local entity = mob:FindFirstChild("Entity")
-    if entity then
-        local hpVal = entity:FindFirstChild("Health")
-        if hpVal and hpVal:IsA("ValueBase") then
-            return hpVal.Value
-        end
-    end
-    local hum = mob:FindFirstChildOfClass("Humanoid")
-    if hum then
-        return hum.Health
+    if entity and entity:FindFirstChild("Health") and entity.Health:IsA("ValueBase") then
+        return entity.Health.Value
     end
     return 9999999
 end
@@ -272,9 +272,6 @@ local function getMobRoot(mob)
         or mob.PrimaryPart
         or mob:FindFirstChild("Torso")
         or mob:FindFirstChild("UpperTorso")
-        or mob:FindFirstChild("Head")
-        or mob:FindFirstChildOfClass("MeshPart")
-        or mob:FindFirstChildOfClass("BasePart")
 end
 
 local TargetCache = {}
@@ -290,9 +287,7 @@ local function scanTargets()
 
     local function checkMob(m)
         pcall(function()
-            if not m or not m:IsA("Model") or not m.Parent then return end
-            if Players:GetPlayerFromCharacter(m) then return end
-            if isMobDead(m) then return end
+            if not isValidMob(m) then return end
 
             local root = getMobRoot(m)
             if not root then return end
@@ -307,7 +302,6 @@ local function scanTargets()
                 Dist = dist,
                 HP = hp,
                 HPText = string.format("%d HP", math.floor(hp)),
-                IsBoss = (m.Parent and m.Parent.Name == "Bosses") or (string.find(m.Name:lower(), "boss") ~= nil),
             })
         end)
     end
@@ -319,7 +313,7 @@ local function scanTargets()
         for _, b in ipairs(bossesFolder:GetChildren()) do checkMob(b) end
     end
 
-    -- 🎯 REGRA SOLICITADA: Menor vida primeiro. Se tiverem a mesma vida, o mais perto primeiro!
+    -- 🎯 Prioridade: Menor vida primeiro. Empate: Mais perto primeiro!
     table.sort(list, function(a, b)
         if math.abs(a.HP - b.HP) > 0.05 then
             return a.HP < b.HP
@@ -337,12 +331,12 @@ local lastAttackTick = 0
 local lastSkillTick = 0
 
 local function executeApexAttack(targetMob)
-    if not targetMob or isMobDead(targetMob.Model) then return end
+    if not targetMob or not isValidMob(targetMob.Model) then return end
     local mobModel = targetMob.Model
     local mobRoot = targetMob.Root
     if not mobModel or not mobRoot then return end
 
-    -- 1. Disparo do Remote Oficial do Swordburst 2 (Pure Packet Attack)
+    -- 1. Ataque Básico Oficial (Pure Packet)
     pcall(function()
         Event:FireServer(
             "Combat",
@@ -388,12 +382,10 @@ local function executeApexAttack(targetMob)
             end
         end
     end
-
-    -- ZERO VirtualInputManager! O cursor e a tela permanecem 100% livres!
 end
 
 -- ====================================================================
--- 📱 INTERFACE MOBILE HUD APEX V32 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
+-- 📱 INTERFACE MOBILE HUD APEX V33 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
 -- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GhostHubApex"
@@ -442,10 +434,10 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST APEX V32 • SERVER HOP GOD"
+Title.Text = "👻 GHOST APEX V33 • ANTI-VOID GUARDIAN"
 Title.TextColor3 = Color3.fromRGB(0, 255, 185)
 Title.Font = Enum.Font.GothamBlack
-Title.TextSize = 11
+Title.TextSize = 10.5
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
 local CloseBtn = Instance.new("TextButton", Header)
@@ -519,7 +511,7 @@ StatusText.Font = Enum.Font.GothamMedium
 StatusText.TextSize = 9.5
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.TextWrapped = true
-StatusText.Text = "🎯 Localizando monstros no mapa..."
+StatusText.Text = "🎯 Localizando monstros vivos no mapa..."
 
 -- Lista de Opções Rolável (Com AutomaticCanvasSize para suportar todos os botões)
 local ControlsScroll = Instance.new("ScrollingFrame", Main)
@@ -621,13 +613,12 @@ local function createToggle(name, initialVal, callback)
 end
 
 -- Toggles Solicitados
-createToggle("🌐 AUTO SERVER HOP (QUANDO ENTRAR GENTE)", Settings.AutoServerHop, function(v) Settings.AutoServerHop = v end)
-createToggle("🛡️ ZERO DANO (SAFE OFFSET BLUU)", Settings.GodModeDistance, function(v) Settings.GodModeDistance = v end)
 createToggle("🕳️ MODO SUBTERRÂNEO (ABAIXO DO CHÃO)", Settings.Underground, function(v) Settings.Underground = v end)
 createToggle("👻 INVISIBILIDADE (AVATAR & ESPADAS)", Settings.Invisibility, function(v) Settings.Invisibility = v end)
 createToggle("💥 KILL AURA (MAPA INTEIRO)", Settings.KillAura, function(v) Settings.KillAura = v end)
 createToggle("🗡️ BURST DE SWORD SKILLS", Settings.SwordSkills, function(v) Settings.SwordSkills = v end)
 createToggle("🏃 ESTÂMINA INFINITA (100%)", Settings.InfStamina, function(v) Settings.InfStamina = v end)
+createToggle("🌐 AUTO SERVER HOP (QUANDO ENTRAR GENTE)", Settings.AutoServerHop, function(v) Settings.AutoServerHop = v end)
 createToggle("🛡️ FARM APENAS SOZINHO (SOLO)", Settings.SoloOnly, function(v) Settings.SoloOnly = v end)
 createToggle("👻 NOCLIP (PAREDES/CHÃO)", Settings.NoClip, function(v) Settings.NoClip = v end)
 createToggle("🏰 AUTO-INICIAR DUNGEONS", Settings.AutoDungeon, function(v) Settings.AutoDungeon = v end)
@@ -637,7 +628,7 @@ local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "👻 APEX V32"
+FloatBtn.Text = "👻 APEX V33"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -710,7 +701,6 @@ RunService.Stepped:Connect(function()
             end
         end
     else
-        -- Quando pausado, mantém colisão para ficar firme no chão sem afundar
         for _, p in ipairs(char:GetDescendants()) do
             if p:IsA("BasePart") and (p.Name == "HumanoidRootPart" or p.Name == "Torso" or p.Name == "UpperTorso" or p.Name == "LowerTorso") then
                 p.CanCollide = true
@@ -720,7 +710,6 @@ RunService.Stepped:Connect(function()
 
     -- 👻 INVISIBILIDADE TOTAL: AVATAR + ESPADAS / ARMAS
     if Settings.Invisibility then
-        -- 1. Peças do Avatar
         for _, p in ipairs(char:GetDescendants()) do
             if p:IsA("BasePart") then
                 p.Transparency = 1
@@ -731,7 +720,6 @@ RunService.Stepped:Connect(function()
             end
         end
 
-        -- 2. Espadas e Armas no CharacterItems (Swordburst 2 guarda as armas aqui!)
         local charItems = Workspace:FindFirstChild("CharacterItems")
         if charItems then
             local userFolder = charItems:FindFirstChild(tostring(LocalPlayer.UserId))
@@ -823,40 +811,34 @@ RunService.Heartbeat:Connect(function(dt)
         return
     end
 
+    -- 🚨 GUARDIÃO ANTI-VOID: Se por algum motivo o boneco cair no void, resgata na hora!
+    local myPos = char:GetPivot().Position
+    if myPos.Y < -35 or myPos.Y > 3000 then
+        local safeTarget = TargetCache[1]
+        if safeTarget and isValidMob(safeTarget.Model) then
+            root.CFrame = CFrame.new(safeTarget.Root.Position.X, safeTarget.Root.Position.Y - Settings.FarmDepth, safeTarget.Root.Position.Z)
+        else
+            local spawn = Workspace:FindFirstChild("SpawnLocation", true) or Workspace:FindFirstChild("Spawn", true)
+            if spawn then
+                root.CFrame = CFrame.new(spawn.Position + Vector3.new(0, 4, 0))
+            else
+                root.CFrame = CFrame.new(0, 15, 0)
+            end
+        end
+        root.AssemblyLinearVelocity = Vector3.zero
+        return
+    end
+
     local currentTarget = TargetCache[1]
 
-    if currentTarget and currentTarget.Model and currentTarget.Model.Parent and not isMobDead(currentTarget.Model) then
-        local myPos = char:GetPivot().Position
-        local tModel = currentTarget.Model
+    if currentTarget and isValidMob(currentTarget.Model) then
+        local tRoot = currentTarget.Root
+        local tPos = tRoot.Position
 
-        -- 🕳️ CALCULA A SOLA DOS PÉS DO MOB VIA GetBoundingBox():
-        local mobCFrame, mobSize = tModel:GetBoundingBox()
-        local mobFloorY = mobCFrame.Position.Y - (mobSize.Y * 0.5)
-        local mobCenter = mobCFrame.Position
-        local mobLook = mobCFrame.LookVector
-        local flatLook = Vector3.new(mobLook.X, 0, mobLook.Z)
-        if flatLook.Magnitude > 0 then
-            flatLook = flatLook.Unit
-        else
-            flatLook = Vector3.new(0, 0, 1)
-        end
-
-        local targetGoalPos
-        if Settings.Underground then
-            if Settings.GodModeDistance then
-                -- 🛡️ POSICIONAMENTO ZERO DANO (Estilo Bluu / Offset Seguro):
-                -- 12 studs atrás das costas do mob E 5.5 studs debaixo da terra!
-                -- O mob desfere golpes para a frente (alcance de ~8 studs), errando 100% dos ataques!
-                targetGoalPos = Vector3.new(mobCenter.X, mobFloorY - Settings.FarmDepth, mobCenter.Z) - (flatLook * Settings.SafeBackDistance)
-            else
-                targetGoalPos = Vector3.new(mobCenter.X, mobFloorY - Settings.FarmDepth, mobCenter.Z)
-            end
-        else
-            -- Modo aéreo: 5 studs acima da cabeça e recuado
-            local mobTopY = mobCFrame.Position.Y + (mobSize.Y * 0.5)
-            targetGoalPos = Vector3.new(mobCenter.X, mobTopY + 5.0, mobCenter.Z) - (flatLook * 6.0)
-        end
-
+        -- 🕳️ POSICIONAMENTO ESTÁVEL SEM GIRO:
+        -- Fica exatamente 6 studs abaixo do mob (debaixo da terra, imune aos golpes terrestres do mob)
+        -- NÃO USA CFrame.lookAt vertical nem mob.LookVector circular para eliminar giros!
+        local targetGoalPos = Vector3.new(tPos.X, tPos.Y - Settings.FarmDepth, tPos.Z)
         local diff = targetGoalPos - myPos
         local dist = diff.Magnitude
 
@@ -865,49 +847,45 @@ RunService.Heartbeat:Connect(function(dt)
         local secs = elapsed % 60
 
         StatusText.Text = string.format(
-            "🎯 Alvo Menor Vida: %s (%s)\n📏 Dist: %.1f studs | ⏱️ %02d:%02d | ⚔️ Abatidos: %d\n🛡️ Modo: Zero Dano (-5.5y, -12 studs) | 👥 Servidor: %s\n🗡️ Lâminas: %d | ⚡ Estâmina: 100%%",
+            "🎯 Alvo Menor Vida: %s (%s)\n📏 Dist: %.1f studs | ⏱️ %02d:%02d | ⚔️ Abatidos: %d\n🛡️ Modo: Zero Dano Subterrâneo (-%.1f studs)\n👥 Servidor: %s | 🗡️ Lâminas: %d",
             currentTarget.Name,
             currentTarget.HPText,
             dist,
             mins, secs,
             Stats.MobsSlain,
+            Settings.FarmDepth,
             otherPlayers == 0 and "SOLO (Vazio)" or string.format("%d Players", otherPlayers + 1),
             #myBlades
         )
 
-        -- ⚡ DESLOCAMENTO CFrame ULTRA-RÁPIDO COM RESGATE DO VOID
-        if dist > 50 then
-            -- Teleporte instantâneo se estiver muito longe ou voltando do void
-            root.CFrame = CFrame.lookAt(targetGoalPos, mobCenter)
+        -- ⚡ DESLOCAMENTO CFrame ULTRA-RÁPIDO SEM GIMBAL LOCK (Zero giros de tela)
+        if dist > 80 then
+            -- Se estiver muito distante, teleporta com segurança mantendo orientação horizontal
+            root.CFrame = CFrame.new(targetGoalPos)
             root.AssemblyLinearVelocity = Vector3.zero
-        elseif dist > 1.2 then
+        elseif dist > 1.0 then
             local moveDir = diff.Unit
             local step = math.min(dist, Settings.FlySpeed * dt)
             local newPos = myPos + (moveDir * step)
 
-            root.CFrame = CFrame.lookAt(newPos, mobCenter)
+            root.CFrame = CFrame.new(newPos)
             root.AssemblyLinearVelocity = Vector3.zero
         else
-            root.CFrame = CFrame.lookAt(targetGoalPos, mobCenter)
+            root.CFrame = CFrame.new(targetGoalPos)
             root.AssemblyLinearVelocity = Vector3.zero
         end
 
-        -- Câmera apontada para o mob
-        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, mobCenter)
+        -- ZERO SEQUESTRO DE CÂMERA: A câmera é 100% livre e você olha para onde quiser!
 
         -- 💥 ATAQUE SINCRONIZADO APEX (KILL AURA GLOBAL NO MAPA INTEIRO - 100% CÓDIGO)
         if (now - lastAttackTick >= Settings.AttackCooldown) then
             if Settings.KillAura then
                 local multiCount = 0
-                -- Dispara contra todos os monstros vivos da dungeon simultaneamente
                 for _, mob in ipairs(TargetCache) do
-                    if not isMobDead(mob.Model) then
-                        local mDist = (myPos - mob.Root.Position).Magnitude
-                        if Settings.MapWideAura or mDist <= Settings.AuraRange then
-                            executeApexAttack(mob)
-                            multiCount = multiCount + 1
-                            if multiCount >= Settings.MaxMultiTargets then break end
-                        end
+                    if isValidMob(mob.Model) then
+                        executeApexAttack(mob)
+                        multiCount = multiCount + 1
+                        if multiCount >= Settings.MaxMultiTargets then break end
                     end
                 end
             else
@@ -916,8 +894,8 @@ RunService.Heartbeat:Connect(function(dt)
             lastAttackTick = now
         end
     else
-        -- Mob eliminado! Avança estatística e busca próximo com menor vida
-        if currentTarget and isMobDead(currentTarget.Model) then
+        -- Mob eliminado ou inválido: avança na lista
+        if currentTarget then
             Stats.MobsSlain = Stats.MobsSlain + 1
             table.remove(TargetCache, 1)
         end
@@ -927,11 +905,11 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V32 SERVER HOP GOD] CARREGADO COM SUCESSO!")
-print("   • Auto Server Hop & Low Player Seeker: ATIVOS")
-print("   • Reinício Automático (queue_on_teleport): ATIVO")
-print("   • Zero Cliques de Mouse / 100% Código: ATIVO")
-print("   • Modo Zero Dano (Offset Seguro 12 studs): ATIVO")
-print("   • Burst de Sword Skills: ATIVO")
-print("   • Invisibilidade Completa: Avatar + Espadas")
+print("👻 [GHOST HUB V33 ANTI-VOID GUARDIAN] CARREGADO COM SUCESSO!")
+print("   • Zero Giro de Câmera: Câmera 100% Livre (Sem Sequestro)")
+print("   • Guardião Anti-Void: ATIVO (Resgate imediato se Y < -35)")
+print("   • Validação Estrita de Mobs: Zero Alvos Falsos/Baús")
+print("   • Subterrâneo Estável: -6.0 studs sem Gimbal Lock")
+print("   • Auto Server Hop + queue_on_teleport: ATIVO")
+print("   • Zero Cliques de Mouse: 100% Código e Packet Direto")
 print("═════════════════════════════════════════════════════════════")
