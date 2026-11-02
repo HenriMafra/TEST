@@ -35,6 +35,7 @@ local StatusText = nil
 local queueTeleport = (syn and syn.queue_on_teleport)
     or queue_on_teleport
     or (fluxus and fluxus.queue_on_teleport)
+    or (getgenv and getgenv().queue_on_teleport)
 
 local LOADSTRING_URL = "loadstring(game:HttpGet('https://raw.githubusercontent.com/HenriMafra/TEST/main/test.lua'))()"
 
@@ -71,16 +72,16 @@ end
 -- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V37)
 -- ====================================================================
 local Settings = {
-    AutoFarm = false,         -- DESLIGADO por padrão (o jogador decide quando ativar!)
+    AutoFarm = true,          -- ATIVADO por padrão (Inicia caçando e batendo!)
     FarmDepth = 35.0,         -- Profundidade segura abaixo do mob (-35 studs - ZERO DANO 100%)
     Invisibility = false,     -- DESLIGADO por padrão
     Desync = false,           -- DESLIGADO por padrão
-    AutoServerHop = false,    -- DESLIGADO por padrão
+    AutoServerHop = true,     -- ATIVADO: Sempre troca para servidor vazio se alguém entrar/houver players!
     SoloOnly = false,         -- DESLIGADO por padrão
-    KillAura = false,         -- DESLIGADO por padrão
+    KillAura = true,          -- ATIVADO: Dano em todos os mobs ao mesmo tempo!
     SwordSkills = false,      -- DESLIGADO por padrão
-    InfStamina = false,       -- DESLIGADO por padrão
-    NoClip = false,           -- DESLIGADO por padrão
+    InfStamina = true,        -- ATIVADO: Estâmina infinita 100%
+    NoClip = true,            -- ATIVADO: Permite descer aos -35 studs
     AutoDungeon = false,      -- DESLIGADO por padrão
 
     FlySpeed = 450,           -- Velocidade máxima Bluu (studs/s)
@@ -510,15 +511,15 @@ CloseBtn.MouseButton1Click:Connect(closeMenu)
 local MasterFarmBtn = Instance.new("TextButton", Main)
 MasterFarmBtn.Size = UDim2.new(1, -20, 0, 36)
 MasterFarmBtn.Position = UDim2.new(0, 10, 0, 44)
-MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(40, 45, 60)
-MasterFarmBtn.TextColor3 = Color3.fromRGB(200, 210, 225)
-MasterFarmBtn.Text = "▶️ INICIAR AUTO-FARM (PAUSADO)"
+MasterFarmBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 110)
+MasterFarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MasterFarmBtn.Text = "⏹️ PAUSAR AUTO-FARM (RODANDO)"
 MasterFarmBtn.Font = Enum.Font.GothamBold
 MasterFarmBtn.TextSize = 11
 MasterFarmBtn.Active = true
 Instance.new("UICorner", MasterFarmBtn).CornerRadius = UDim.new(0, 8)
 local MasterStroke = Instance.new("UIStroke", MasterFarmBtn)
-MasterStroke.Color = Color3.fromRGB(70, 80, 105)
+MasterStroke.Color = Color3.fromRGB(0, 255, 185)
 MasterStroke.Thickness = 1.5
 
 local function updateMasterVisual()
@@ -563,7 +564,7 @@ StatusText.Font = Enum.Font.GothamMedium
 StatusText.TextSize = 9.5
 StatusText.TextXAlignment = Enum.TextXAlignment.Left
 StatusText.TextWrapped = true
-StatusText.Text = "⏸️ Status: Auto-Farm Pausado.\nClique no botão acima ou ative o Kill Aura abaixo para começar!"
+StatusText.Text = "🎯 Auto-Farm e Auto Server Hop ATIVADOS! Caçando monstros ou pulando se houver players..."
 
 -- Lista de Opções Rolável (Com AutomaticCanvasSize)
 local ControlsScroll = Instance.new("ScrollingFrame", Main)
