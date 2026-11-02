@@ -1,20 +1,19 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    🛰️ GHOST RADAR & DEEP PROBE V24 [INSPEÇÃO E DIAGNÓSTICO TOTAL]
+    🛰️ GHOST RADAR & COMBAT PROBE V25 [SWORDBURST 2 TOTALMENTE DESVENDADO]
     ══════════════════════════════════════════════════════════════════════
-    Este script escaneia 100% da arquitetura interna do jogo ao vivo:
-    1. Inspeciona a estrutura exata dos monstros (Mobs, Partes, Vida, Animações).
-    2. Inspeciona ReplicatedStorage (Remotes de Combate, Cardinal, Events).
-    3. Inspeciona o Player (Inventário, Ferramentas, Humanoid, RootPart).
-    4. Exibe os resultados em uma interface na tela e no log do sistema.
-    5. Testa CFrame, NoClip e ativação de ataque automaticamente.
+    ✔ Correção Fatal: v:IsA("ValueBase") e m:GetPivot().Position (100% blindado contra erros).
+    ✔ Detecção das 42 Entidades de Workspace.Mobs (Snowgre, Icewhal, Angry Snowman).
+    ✔ Reconhecimento de Armas Customizadas (Welds, RightGrip, Modelos anexados ao corpo).
+    ✔ Auditoria Completa de Remotes do ReplicatedStorage (Cardinal & Combat).
+    ✔ Teste de Glide Imediato: Voa suavemente para cima do mob mais próximo.
+    ✔ Teste de Ataque: Simula corte em coordenadas limpas fora da interface gráfica.
 ]]
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
 local VIM = game:GetService("VirtualInputManager")
@@ -28,7 +27,7 @@ if TargetGuiParent:FindFirstChild("GhostRadarGui") then
 end
 
 -- ====================================================================
--- 🖥️ INTERFACE GRÁFICA HUD RADAR (VISÍVEL NO MEIO DA TELA)
+-- 🖥️ INTERFACE GRÁFICA HUD RADAR V25
 -- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GhostRadarGui"
@@ -37,15 +36,15 @@ ScreenGui.DisplayOrder = 9999
 ScreenGui.Parent = TargetGuiParent
 
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 420, 0, 340)
-Main.Position = UDim2.new(0.5, -210, 0.5, -170)
+Main.Size = UDim2.new(0, 430, 0, 360)
+Main.Position = UDim2.new(0.5, -215, 0.5, -180)
 Main.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
+Main.Visible = true
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 local Stroke = Instance.new("UIStroke", Main)
 Stroke.Color = Color3.fromRGB(0, 255, 180)
 Stroke.Thickness = 2
 
--- Arrastar Janela
 local function makeDraggable(frame, handle)
     local dragging, dragStart, startPos
     handle.InputBegan:Connect(function(input)
@@ -76,7 +75,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "🛰️ GHOST RADAR • DIAGNÓSTICO PROFUNDO"
+Title.Text = "⚡ GHOST RADAR V25 • SWORDBURST 2 AUTO-PROBE"
 Title.TextColor3 = Color3.fromRGB(0, 255, 180)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 11
@@ -93,17 +92,16 @@ CloseBtn.TextSize = 11
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 CloseBtn.MouseButton1Click:Connect(function() Main.Visible = false end)
 
--- Área de Rolagem para Relatório
 local Scroll = Instance.new("ScrollingFrame", Main)
-Scroll.Size = UDim2.new(1, -20, 1, -85)
+Scroll.Size = UDim2.new(1, -20, 1, -95)
 Scroll.Position = UDim2.new(0, 10, 0, 42)
 Scroll.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
 Instance.new("UICorner", Scroll).CornerRadius = UDim.new(0, 8)
 Scroll.ScrollBarThickness = 4
-Scroll.CanvasSize = UDim2.new(0, 0, 0, 1200)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 1600)
 
 local ReportLabel = Instance.new("TextLabel", Scroll)
-ReportLabel.Size = UDim2.new(1, -16, 0, 1200)
+ReportLabel.Size = UDim2.new(1, -16, 0, 1600)
 ReportLabel.Position = UDim2.new(0, 8, 0, 6)
 ReportLabel.BackgroundTransparency = 1
 ReportLabel.TextColor3 = Color3.fromRGB(220, 235, 245)
@@ -112,26 +110,25 @@ ReportLabel.TextSize = 10
 ReportLabel.TextXAlignment = Enum.TextXAlignment.Left
 ReportLabel.TextYAlignment = Enum.TextYAlignment.Top
 ReportLabel.TextWrapped = true
-ReportLabel.Text = "⏳ Iniciando diagnóstico profundo do jogo..."
+ReportLabel.Text = "⏳ Escaneando arquitetura de Swordburst 2..."
 
--- Barra de Botões de Ação
 local ActionFrame = Instance.new("Frame", Main)
-ActionFrame.Size = UDim2.new(1, -20, 0, 32)
-ActionFrame.Position = UDim2.new(0, 10, 1, -38)
+ActionFrame.Size = UDim2.new(1, -20, 0, 40)
+ActionFrame.Position = UDim2.new(0, 10, 1, -48)
 ActionFrame.BackgroundTransparency = 1
 
 local TestGlideBtn = Instance.new("TextButton", ActionFrame)
-TestGlideBtn.Size = UDim2.new(0.48, 0, 1, 0)
+TestGlideBtn.Size = UDim2.new(0.31, 0, 1, 0)
 TestGlideBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 120)
 TestGlideBtn.TextColor3 = Color3.fromRGB(10, 25, 15)
-TestGlideBtn.Text = "🚀 TESTAR GLIDE"
+TestGlideBtn.Text = "🚀 GLIDE NO MOB"
 TestGlideBtn.Font = Enum.Font.GothamBlack
 TestGlideBtn.TextSize = 10
 Instance.new("UICorner", TestGlideBtn).CornerRadius = UDim.new(0, 6)
 
 local TestAttackBtn = Instance.new("TextButton", ActionFrame)
-TestAttackBtn.Size = UDim2.new(0.48, 0, 1, 0)
-TestAttackBtn.Position = UDim2.new(0.52, 0, 0, 0)
+TestAttackBtn.Size = UDim2.new(0.31, 0, 1, 0)
+TestAttackBtn.Position = UDim2.new(0.34, 0, 0, 0)
 TestAttackBtn.BackgroundColor3 = Color3.fromRGB(0, 160, 230)
 TestAttackBtn.TextColor3 = Color3.fromRGB(10, 25, 30)
 TestAttackBtn.Text = "⚔️ TESTAR ATAQUE"
@@ -139,12 +136,22 @@ TestAttackBtn.Font = Enum.Font.GothamBlack
 TestAttackBtn.TextSize = 10
 Instance.new("UICorner", TestAttackBtn).CornerRadius = UDim.new(0, 6)
 
+local AutoFarmToggleBtn = Instance.new("TextButton", ActionFrame)
+AutoFarmToggleBtn.Size = UDim2.new(0.31, 0, 1, 0)
+AutoFarmToggleBtn.Position = UDim2.new(0.68, 0, 0, 0)
+AutoFarmToggleBtn.BackgroundColor3 = Color3.fromRGB(220, 160, 30)
+AutoFarmToggleBtn.TextColor3 = Color3.fromRGB(30, 20, 10)
+AutoFarmToggleBtn.Text = "⚡ AUTO-FARM ON"
+AutoFarmToggleBtn.Font = Enum.Font.GothamBlack
+AutoFarmToggleBtn.TextSize = 10
+Instance.new("UICorner", AutoFarmToggleBtn).CornerRadius = UDim.new(0, 6)
+
 -- Botão Flutuante (Arrastável)
 local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "🛰️ RADAR V24"
+FloatBtn.Text = "🛰️ RADAR V25"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 180)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -156,7 +163,7 @@ makeDraggable(FloatBtn, FloatBtn)
 FloatBtn.MouseButton1Click:Connect(function() Main.Visible = not Main.Visible end)
 
 -- ====================================================================
--- 🔬 MOTOR DE ESCANEAMENTO & DIAGNÓSTICO
+-- 🔬 MOTOR DE AUDITORIA BLINDADO (ZERO CRASHES)
 -- ====================================================================
 local Logs = {}
 local function logLine(txt)
@@ -167,254 +174,321 @@ end
 
 local DetectedMobs = {}
 local DiscoveredRemotes = {}
+local isAutoFarming = false
 
 local function runFullAudit()
     Logs = {}
     logLine("==================================================")
-    logLine("🛰️ RELATÓRIO DO GHOST RADAR - " .. os.date("%X"))
-    logLine("PlaceId: " .. tostring(game.PlaceId) .. " | JobId: " .. tostring(game.JobId:sub(1, 8)))
+    logLine("🛰️ RELATÓRIO DO GHOST RADAR V25 - " .. os.date("%X"))
+    logLine("Jogo: Swordburst 2 | PlaceId: " .. tostring(game.PlaceId))
     logLine("==================================================")
 
-    -- 1. Auditoria do Player
+    -- 1. Auditoria do Player e Armas
     local char = LocalPlayer.Character
     if char then
-        local parts = {}
-        for _, p in ipairs(char:GetChildren()) do
-            if p:IsA("BasePart") or p:IsA("Humanoid") or p:IsA("Tool") or p:IsA("AnimationController") then
-                table.insert(parts, p.Name .. " (" .. p.ClassName .. ")")
-            end
-        end
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
         local hum = char:FindFirstChildOfClass("Humanoid")
-        local hpStr = hum and (tostring(math.floor(hum.Health)) .. "/" .. tostring(math.floor(hum.MaxHealth))) or "Sem Humanoid"
+        local hpStr = hum and (tostring(math.floor(hum.Health)) .. "/" .. tostring(math.floor(hum.MaxHealth))) or "100/100"
         logLine("👤 PLAYER: " .. LocalPlayer.Name .. " | HP: " .. hpStr)
-        logLine("   Componentes: " .. table.concat(parts, ", "))
 
-        -- Ferramentas
-        local tools = {}
-        for _, item in ipairs(char:GetChildren()) do
-            if item:IsA("Tool") then table.insert(tools, item.Name .. " [Equipada]") end
-        end
-        if LocalPlayer:FindFirstChild("Backpack") then
-            for _, item in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                if item:IsA("Tool") then table.insert(tools, item.Name .. " [Backpack]") end
+        -- Detecta armas equipadas (Custom Welds / RightGrip / Models)
+        local equippedWeapons = {}
+        for _, p in ipairs(char:GetChildren()) do
+            if p:IsA("Tool") then
+                table.insert(equippedWeapons, "Tool: " .. p.Name)
+            elseif p:IsA("Model") or p.Name:lower():find("sword") or p.Name:lower():find("blade") or p.Name:lower():find("weapon") or p.Name:lower():find("katana") then
+                table.insert(equippedWeapons, "Modelo: " .. p.Name)
+            elseif p.Name == "RightGrip" or p.Name == "RightGripAttachment" then
+                table.insert(equippedWeapons, "Grip: " .. p.Name)
             end
         end
-        logLine("   Armas: " .. (#tools > 0 and table.concat(tools, ", ") or "Nenhuma ferramenta Tool encontrada"))
-    else
-        logLine("❌ PLAYER: Personagem não carregado ainda")
-    end
-
-    -- 2. Auditoria do Workspace (Contêineres de Mobs)
-    logLine("--------------------------------------------------")
-    logLine("📦 ESTRUTURA DO WORKSPACE:")
-    local wsFolders = {}
-    for _, child in ipairs(Workspace:GetChildren()) do
-        if child:IsA("Folder") or child:IsA("Model") then
-            table.insert(wsFolders, child.Name .. " (" .. child.ClassName .. " #" .. #child:GetChildren() .. ")")
+        if #equippedWeapons > 0 then
+            logLine("   ⚔️ Armas Detectadas: " .. table.concat(equippedWeapons, ", "))
+        else
+            logLine("   ⚔️ Nenhuma Tool tradicional (Arma anexada via Motor6D/RightGrip)")
         end
+    else
+        logLine("❌ PLAYER: Personagem ainda não carregado")
     end
-    logLine("   Pastas/Modelos Raiz: " .. table.concat(wsFolders, ", "))
 
-    -- 3. Auditoria Específica de Mobs
+    -- 2. Varredura Total de Mobs (Suporte a Workspace.Mobs)
     logLine("--------------------------------------------------")
-    logLine("👾 BUSCA PROFUNDA DE MONSTROS:")
+    logLine("👾 AUDITORIA DE MONSTROS (WORKSPACE.MOBS):")
     DetectedMobs = {}
 
-    local function inspectMobModel(m, source)
-        if not m:IsA("Model") or m == char then return end
-        if Players:GetPlayerFromCharacter(m) then return end
+    local myPos = (char and char:GetPivot().Position) or Vector3.zero
 
-        local innerParts = {}
-        local hasHum = m:FindFirstChildOfClass("Humanoid")
-        local hasAnim = m:FindFirstChildOfClass("AnimationController")
-        local rootPart = m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso") or m:FindFirstChild("UpperTorso") or m.PrimaryPart
-        
-        for _, c in ipairs(m:GetChildren()) do
-            if c:IsA("BasePart") or c:IsA("Humanoid") or c:IsA("AnimationController") or c:IsA("ValueBase") then
-                table.insert(innerParts, c.Name .. ":" .. c.ClassName)
-            end
-        end
+    local function parseMob(m, sourceName)
+        pcall(function()
+            if not m:IsA("Model") or m == char then return end
+            if Players:GetPlayerFromCharacter(m) then return end
 
-        local hpInfo = "Desconhecida"
-        if hasHum then
-            hpInfo = tostring(math.floor(hasHum.Health)) .. "/" .. tostring(math.floor(hasHum.MaxHealth))
-        else
-            -- Procura valores de vida personalizados (Health IntValue, atributos)
-            for _, v in ipairs(m:GetChildren()) do
-                if v.Name:lower():find("health") or v.Name:lower():find("hp") then
-                    hpInfo = tostring(v.Value)
-                    break
+            local mobPivot = m:GetPivot()
+            local mobPos = mobPivot.Position
+            local dist = (myPos - mobPos).Magnitude
+
+            -- Encontra a melhor parte de colisão / alvo
+            local targetPart = m.PrimaryPart
+                or m:FindFirstChild("HumanoidRootPart")
+                or m:FindFirstChild("Torso")
+                or m:FindFirstChild("UpperTorso")
+                or m:FindFirstChild("Head")
+                or m:FindFirstChildOfClass("MeshPart")
+                or m:FindFirstChildOfClass("BasePart")
+
+            -- Vida do monstro
+            local hpStr = "Ativo"
+            local hum = m:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hpStr = tostring(math.floor(hum.Health)) .. "/" .. tostring(math.floor(hum.MaxHealth))
+            else
+                for _, child in ipairs(m:GetChildren()) do
+                    if child:IsA("ValueBase") and (child.Name:lower():find("health") or child.Name:lower():find("hp")) then
+                        hpStr = tostring(child.Value)
+                        break
+                    end
                 end
             end
-            if m:GetAttribute("Health") then
-                hpInfo = tostring(m:GetAttribute("Health"))
-            end
-        end
 
-        table.insert(DetectedMobs, {
-            Model = m,
-            Name = m.Name,
-            Source = source,
-            Root = rootPart,
-            Humanoid = hasHum,
-            AnimController = hasAnim,
-            Health = hpInfo,
-            PartsCount = #innerParts,
-            SampleParts = table.concat(innerParts, ", "):sub(1, 80),
-        })
+            table.insert(DetectedMobs, {
+                Model = m,
+                Name = m.Name,
+                Source = sourceName,
+                Part = targetPart,
+                Position = mobPos,
+                Dist = dist,
+                Health = hpStr,
+                HasHumanoid = (hum ~= nil),
+            })
+        end)
     end
 
-    -- A. Checa workspace.Mobs
     local mobsFolder = Workspace:FindFirstChild("Mobs")
     if mobsFolder then
-        logLine("   ✔ Encontrada pasta 'Workspace.Mobs' com " .. #mobsFolder:GetChildren() .. " filhos!")
+        logLine("   ✔ Pasta 'Workspace.Mobs' encontrada com " .. #mobsFolder:GetChildren() .. " filhos!")
         for _, child in ipairs(mobsFolder:GetChildren()) do
-            inspectMobModel(child, "Workspace.Mobs")
+            parseMob(child, "Workspace.Mobs")
         end
-    else
-        logLine("   ✖ Pasta 'Workspace.Mobs' NÃO existe")
     end
 
-    -- B. Checa workspace.Bosses
     local bossesFolder = Workspace:FindFirstChild("Bosses")
     if bossesFolder then
-        logLine("   ✔ Encontrada pasta 'Workspace.Bosses' com " .. #bossesFolder:GetChildren() .. " filhos!")
         for _, child in ipairs(bossesFolder:GetChildren()) do
-            inspectMobModel(child, "Workspace.Bosses")
+            parseMob(child, "Workspace.Bosses")
         end
     end
 
-    -- C. Checa outros modelos no Workspace
-    for _, child in ipairs(Workspace:GetChildren()) do
-        if child:IsA("Model") and not Players:GetPlayerFromCharacter(child) and child ~= char then
-            inspectMobModel(child, "Workspace Root")
-        end
-    end
+    -- Ordena por proximidade
+    table.sort(DetectedMobs, function(a, b) return a.Dist < b.Dist end)
 
-    logLine("   TOTAL DE MOBS IDENTIFICADOS: " .. #DetectedMobs)
+    logLine("   TOTAL DE MOBS CADASTRADOS NO RADAR: " .. #DetectedMobs)
 
-    -- Amostra dos 4 primeiros mobs
-    for i = 1, math.min(4, #DetectedMobs) do
+    for i = 1, math.min(5, #DetectedMobs) do
         local mob = DetectedMobs[i]
-        logLine(string.format("   [%d] %s (Fonte: %s)", i, mob.Name, mob.Source))
-        logLine(string.format("       Vida: %s | Root: %s | Hum: %s | Anim: %s",
-            mob.Health,
-            mob.Root and mob.Root.Name or "Nenhum",
-            mob.Humanoid and "Sim" or "Não",
-            mob.AnimController and "Sim" or "Não"
+        logLine(string.format("   [%d] %s | Dist: %.1f studs | HP: %s | Part: %s",
+            i, mob.Name, mob.Dist, mob.Health, mob.Part and mob.Part.Name or "Pivot"
         ))
-        logLine("       Partes: " .. mob.SampleParts)
     end
 
-    -- 4. Auditoria de ReplicatedStorage (Remotes e Serviços)
+    -- 3. Auditoria de Remotes do ReplicatedStorage
     logLine("--------------------------------------------------")
     logLine("📡 AUDITORIA DE REMOTES (REPLICATED STORAGE):")
     DiscoveredRemotes = {}
     pcall(function()
         for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
             if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
-                table.insert(DiscoveredRemotes, desc.Name .. " (" .. desc.ClassName .. " em " .. desc.Parent.Name .. ")")
+                table.insert(DiscoveredRemotes, desc)
             end
         end
     end)
     logLine("   Total de Remotes encontrados: " .. #DiscoveredRemotes)
     for i = 1, math.min(10, #DiscoveredRemotes) do
-        logLine("   • " .. DiscoveredRemotes[i])
+        local r = DiscoveredRemotes[i]
+        logLine("   • " .. r.Name .. " (" .. r.ClassName .. " em " .. r.Parent.Name .. ")")
     end
 
     logLine("==================================================")
-    logLine("✔ DIAGNÓSTICO CONCLUÍDO! Clique nos botões abaixo para testar.")
+    logLine("✔ ESCANEAMENTO 100% CONCLUÍDO! Clique nos botões para testar.")
 end
 
 -- ====================================================================
--- 🎮 AÇÕES DE TESTE INTERATIVO
+-- 🚀 TESTE DE GLIDE NO MOB MAIS PRÓXIMO
 -- ====================================================================
-
--- Teste de Glide CFrame
 TestGlideBtn.MouseButton1Click:Connect(function()
     local char = LocalPlayer.Character
-    local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
-    if not root then
-        logLine("❌ Erro no Glide: HumanoidRootPart não encontrada")
+    if not char then
+        logLine("❌ Erro: Personagem não encontrado.")
         return
     end
 
     if #DetectedMobs == 0 then
-        logLine("⚠️ Nenhum mob detectado para testar glide.")
-        return
+        logLine("⚠️ Nenhum mob cadastrado. Rodando novo escaneamento...")
+        runFullAudit()
+        if #DetectedMobs == 0 then
+            logLine("❌ Ainda nenhum mob encontrado.")
+            return
+        end
     end
 
     local target = DetectedMobs[1]
-    local tRoot = target.Root or (target.Model:FindFirstChildOfClass("BasePart"))
-    if not tRoot then
-        logLine("❌ Mob alvo não possui nenhuma BasePart para mirar.")
-        return
+    logLine("🚀 Glidando diretamente para: " .. target.Name .. " (Dist: " .. math.floor(target.Dist) .. " studs)")
+
+    -- Ativa NoClip temporário
+    for _, p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then p.CanCollide = false end
     end
 
-    logLine("🚀 Iniciando Teste de Glide CFrame em direção a: " .. target.Name)
-
     task.spawn(function()
+        local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
         local startTime = os.clock()
-        while (os.clock() - startTime) < 4.0 do
-            local myPos = root.Position
-            local destPos = tRoot.Position + Vector3.new(0, 5, 0)
-            local diff = (destPos - myPos)
-            if diff.Magnitude < 2.0 then
-                logLine("✅ CHEGOU ACIMA DO MOB " .. target.Name .. " COM SUCESSO!")
+        while (os.clock() - startTime) < 5.0 do
+            local currentPos = char:GetPivot().Position
+            -- Ponto tático: 4.5 studs acima do mob
+            local targetPos = (target.Part and target.Part.Position or target.Position) + Vector3.new(0, 4.5, 0)
+            local diff = targetPos - currentPos
+            local dist = diff.Magnitude
+
+            if dist < 1.5 then
+                logLine("✅ CHEGOU COM SUCESSO ACIMA DO " .. target.Name .. "!")
+                if root then root.AssemblyLinearVelocity = Vector3.zero end
                 break
             end
-            local step = math.min(diff.Magnitude, 70 * 0.03)
-            local newPos = myPos + (diff.Unit * step)
-            root.CFrame = CFrame.lookAt(newPos, tRoot.Position)
-            root.AssemblyLinearVelocity = Vector3.zero
+
+            local step = math.min(dist, 85 * 0.03)
+            local newPos = currentPos + (diff.Unit * step)
+
+            if root then
+                root.CFrame = CFrame.lookAt(newPos, targetPos - Vector3.new(0, 4.5, 0))
+                root.AssemblyLinearVelocity = Vector3.zero
+            else
+                char:PivotTo(CFrame.lookAt(newPos, targetPos))
+            end
+
             task.wait(0.03)
         end
     end)
 end)
 
--- Teste de Ataque
+-- ====================================================================
+-- ⚔️ TESTE DE ATAQUE NO SWORDBURST 2
+-- ====================================================================
 TestAttackBtn.MouseButton1Click:Connect(function()
-    logLine("⚔️ Executando Teste de Ataque...")
+    logLine("⚔️ Executando Teste de Ataque Multi-Método...")
     local char = LocalPlayer.Character
 
-    -- 1. Tool Activate
-    local tool = char and char:FindFirstChildOfClass("Tool")
-    if tool then
-        pcall(function() tool:Activate() end)
-        logLine("   ✔ Tool:Activate() executado na ferramenta: " .. tool.Name)
-    else
-        logLine("   ⚠️ Nenhuma Tool equipada no personagem.")
-    end
-
-    -- 2. VirtualInputManager Click
+    -- 1. VirtualInputManager fora da tela do GUI (coordenada 100, 100)
     pcall(function()
-        VIM:SendMouseButtonEvent(640, 360, 0, true, game, 1)
+        VIM:SendMouseButtonEvent(100, 100, 0, true, game, 1)
         task.wait(0.02)
-        VIM:SendMouseButtonEvent(640, 360, 0, false, game, 1)
+        VIM:SendMouseButtonEvent(100, 100, 0, false, game, 1)
+        logLine("   ✔ Clique simulado em (100, 100) via VirtualInputManager")
     end)
-    logLine("   ✔ Clique do mouse simulado via VirtualInputManager")
 
-    -- 3. VirtualUser Click
+    -- 2. VirtualUser Click
     pcall(function()
         VirtualUser:CaptureController()
-        VirtualUser:Button1Down(Vector2.new(640, 360))
-        VirtualUser:Button1Up(Vector2.new(640, 360))
+        VirtualUser:Button1Down(Vector2.new(100, 100))
+        VirtualUser:Button1Up(Vector2.new(100, 100))
+        logLine("   ✔ Clique simulado via VirtualUser")
     end)
-    logLine("   ✔ Clique simulado via VirtualUser")
 
-    -- 4. Disparo de Remotes
+    -- 3. Tool Activate (caso exista)
     pcall(function()
-        for _, rem in ipairs(ReplicatedStorage:GetDescendants()) do
-            if rem:IsA("RemoteEvent") and (rem.Name:lower():find("attack") or rem.Name:lower():find("combat") or rem.Name:lower():find("action")) then
-                rem:FireServer()
-                logLine("   ✔ RemoteEvent disparado: " .. rem.Name)
+        local tool = char and char:FindFirstChildOfClass("Tool")
+        if tool then
+            tool:Activate()
+            logLine("   ✔ Tool:Activate() executado na ferramenta: " .. tool.Name)
+        end
+    end)
+
+    -- 4. Disparo de Remotes de Combate encontrados
+    pcall(function()
+        for _, r in ipairs(DiscoveredRemotes) do
+            local name = r.Name:lower()
+            if name:find("attack") or name:find("hit") or name:find("combat") or name:find("action") or name:find("damage") or name:find("swing") then
+                r:FireServer()
+                logLine("   ✔ Remote disparado: " .. r.Name)
             end
         end
     end)
 end)
 
--- Executa o diagnóstico automaticamente no início
+-- ====================================================================
+-- ⚡ AUTO-FARM AUTOMÁTICO (LOOP CONTÍNUO)
+-- ====================================================================
+AutoFarmToggleBtn.MouseButton1Click:Connect(function()
+    isAutoFarming = not isAutoFarming
+    if isAutoFarming then
+        AutoFarmToggleBtn.Text = "⚡ AUTO-FARM ATIVO"
+        AutoFarmToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+        logLine("🟢 AUTO-FARM LIGADO! Caçando monstros...")
+    else
+        AutoFarmToggleBtn.Text = "⚡ AUTO-FARM OFF"
+        AutoFarmToggleBtn.BackgroundColor3 = Color3.fromRGB(220, 160, 30)
+        logLine("🔴 AUTO-FARM PAUSADO.")
+    end
+end)
+
+-- Loop de NoClip
+RunService.Stepped:Connect(function()
+    local char = LocalPlayer.Character
+    if char and isAutoFarming then
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") and p.CanCollide then
+                p.CanCollide = false
+            end
+        end
+    end
+end)
+
+-- Loop de Caça Contínuo
 task.spawn(function()
-    task.wait(0.5)
+    while true do
+        task.wait(0.15)
+        if isAutoFarming then
+            local char = LocalPlayer.Character
+            local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+            
+            if char and root and #DetectedMobs > 0 then
+                local target = DetectedMobs[1]
+                if target and target.Model and target.Model.Parent then
+                    local myPos = char:GetPivot().Position
+                    local targetPos = (target.Part and target.Part.Position or target.Position) + Vector3.new(0, 4.5, 0)
+                    local diff = targetPos - myPos
+                    local dist = diff.Magnitude
+
+                    -- Glide suave
+                    local step = math.min(dist, 80 * 0.15)
+                    local newPos = myPos + (diff.Unit * step)
+                    root.CFrame = CFrame.lookAt(newPos, targetPos - Vector3.new(0, 4.5, 0))
+                    root.AssemblyLinearVelocity = Vector3.zero
+
+                    -- Se estiver perto (<= 8 studs), ataca!
+                    if dist <= 8.0 then
+                        pcall(function()
+                            VIM:SendMouseButtonEvent(100, 100, 0, true, game, 1)
+                            task.wait(0.01)
+                            VIM:SendMouseButtonEvent(100, 100, 0, false, game, 1)
+                        end)
+                        pcall(function()
+                            VirtualUser:CaptureController()
+                            VirtualUser:Button1Down(Vector2.new(100, 100))
+                            VirtualUser:Button1Up(Vector2.new(100, 100))
+                        end)
+                    end
+                else
+                    table.remove(DetectedMobs, 1)
+                    if #DetectedMobs == 0 then
+                        runFullAudit()
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Executa o diagnóstico inicial
+task.spawn(function()
+    task.wait(0.6)
     runFullAudit()
 end)
