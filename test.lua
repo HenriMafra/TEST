@@ -1,20 +1,23 @@
 --[[
     ══════════════════════════════════════════════════════════════════════
-    👻 GHOST HUB V30 [SWORDBURST 2 APEX - TRUE UNDERGROUND & GHOST BLADES]
+    👻 GHOST HUB V31 [SWORDBURST 2 APEX - ZERO DAMAGE & PURE CODE GOD]
     ══════════════════════════════════════════════════════════════════════
-    Aprimoramentos de Precisão de Posição & Invisibilidade de Armas:
-    ✔ Verdadeiro Subterrâneo via GetBoundingBox():
-      - Calcula a base exata dos pés do mob e posiciona o jogador a -5.2 studs
-        abaixo do chão (nunca mais fica dentro do mob!).
-    ✔ Espadas e Armas 100% Invisíveis:
-      - Aplica transparência total em Workspace.CharacterItems[UserId]
-        (Lâminas, cabos, partículas, trails e brilhos completamente invisíveis).
+    Construído com os métodos mais agressivos de Bluu, Oufguy & Ugly:
+    ✔ ZERO Cliques de Mouse / Cursor 100% Livre:
+      - Removido todo e qualquer VirtualInputManager.
+      - Ações executadas 100% via código direto (Remote Oficial + TouchInterest).
+    ✔ Modo Zero Dano / God Mode (Safe Back & Deep Offset - Estilo Bluu):
+      - Posiciona 12 studs atrás do mob e 5.5 studs abaixo do chão.
+      - O mob bate para frente no vazio (alcance de 8 studs), errando 100% dos golpes.
+      - Desync ativo (Animate.Parent = nil) que quebra o rastreio do mob.
+    ✔ Burst Agressivo de Skills (Estilo Oufguy):
+      - Dispara todas as habilidades de espada ('Downward Smash', 'Infinity Slash', etc.)
+        em sequência rápida sem engasgos.
     ✔ Kill Aura Global do Mapa Inteiro:
-      - Dispara ataques simultâneos contra TODOS os mobs vivos do mapa no tick de combate.
-      - Super Warp Subterrâneo (320 studs/s) para satisfazer qualquer checagem de distância do servidor.
-    ✔ Anti-Gravidade e Anti-Void:
-      - BodyVelocity com força 1e9 impede qualquer queda no void.
-    ✔ Prioridade Menor Vida + Desempate por Distância.
+      - Envia o handshake de combate para até 30 mobs simultâneos por ciclo.
+    ✔ Invisibilidade Completa de Avatar e Espadas (Workspace.CharacterItems).
+    ✔ Anti-Gravidade Absoluta (BodyVelocity 1e9) + Resgate Instantâneo Anti-Void.
+    ✔ 100% Luau Otimizado / Zero Webhooks / Sem interferência na tela.
 ]]
 
 local Players = game:GetService("Players")
@@ -23,7 +26,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
-local VIM = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -44,28 +46,30 @@ for _, name in ipairs({ "GhostHubApex", "GhostHubSB2", "GhostRadarGui" }) do
 end
 
 -- ====================================================================
--- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V30)
+-- ⚙️ CONFIGURAÇÕES PRINCIPAIS (APEX V31 EXTREME)
 -- ====================================================================
 local Settings = {
     AutoFarm = true,          -- ATIVADO por padrão (caça e bate imediatamente!)
     Underground = true,       -- Farma debaixo da terra (100% abaixo do piso)
-    FarmDepth = 5.2,          -- Profundidade abaixo da SOLA DOS PÉS do mob (studs)
-    FarmHeight = 4.2,         -- Altura caso o modo aéreo seja ativado
+    GodModeDistance = true,   -- Posiciona atrás/abaixo do mob (Zero Dano dos mobs!)
+    FarmDepth = 5.5,          -- Profundidade abaixo da SOLA DOS PÉS do mob (studs)
+    SafeBackDistance = 12.0,  -- Distância atrás das costas do mob (fora do golpe dele)
     Invisibility = true,      -- Personagem E ESPADAS transparentes/invisíveis
+    Desync = true,            -- Desync de animações (estilo Bluu)
     SoloOnly = false,         -- Desligado por padrão para funcionar em servidores públicos
     KillAura = true,          -- Kill Aura multialvo
     MapWideAura = true,       -- Alcance do Kill Aura cobre o mapa inteiro
     AuraRange = 5000,         -- Raio em studs
-    MaxMultiTargets = 25,     -- Quantidade máxima de mobs atacados simultaneamente por ciclo
-    SwordSkills = true,       -- Uso de habilidades nativas de espada
+    MaxMultiTargets = 30,     -- Quantidade máxima de mobs atacados simultaneamente por ciclo
+    SwordSkills = true,       -- Uso de habilidades nativas de espada (burst Oufguy)
     InfStamina = true,        -- 100% de estâmina ininterrupta
     NoClip = true,            -- Atravessa chão, paredes e pedras
     AutoDungeon = true,       -- Inicia masmorras automaticamente
     MobESP = true,            -- Destaque visual dos monstros
 
-    FlySpeed = 320,           -- Velocidade máxima de deslocamento CFrame (studs/s)
-    AttackCooldown = 0.12,    -- Frequência de ataque ultra-rápida
-    SkillCooldown = 1.0,      -- Intervalo de habilidades especiais
+    FlySpeed = 340,           -- Velocidade máxima de deslocamento CFrame (studs/s)
+    AttackCooldown = 0.10,    -- Frequência de ataque ultra-rápida (10 ataques por segundo)
+    SkillCooldown = 0.8,      -- Intervalo de habilidades especiais em burst
 }
 
 local Stats = {
@@ -231,11 +235,10 @@ local function scanTargets()
 end
 
 -- ====================================================================
--- ⚡ MOTOR DE ATAQUE EXTREMO (REMOTE COMBAT + TOUCH + SKILLS)
+-- ⚡ MOTOR DE ATAQUE EXTREMO (100% CÓDIGO DIRETO / ZERO CLIQUES DE TELA)
 -- ====================================================================
 local lastAttackTick = 0
 local lastSkillTick = 0
-local skillIndex = 1
 
 local function executeApexAttack(targetMob)
     if not targetMob or isMobDead(targetMob.Model) then return end
@@ -243,7 +246,7 @@ local function executeApexAttack(targetMob)
     local mobRoot = targetMob.Root
     if not mobModel or not mobRoot then return end
 
-    -- 1. Disparo do Remote Oficial do Swordburst 2 (Combat Attack)
+    -- 1. Disparo do Remote Oficial do Swordburst 2 (Pure Packet Attack)
     pcall(function()
         Event:FireServer(
             "Combat",
@@ -257,27 +260,28 @@ local function executeApexAttack(targetMob)
         )
     end)
 
-    -- 2. Habilidade Especial de Espada (Sword Skills)
+    -- 2. Burst Agressivo de Sword Skills (Estilo Oufguy massFire)
     if Settings.SwordSkills and (os.clock() - lastSkillTick >= Settings.SkillCooldown) then
-        local currentSkill = SwordSkillsList[skillIndex]
-        skillIndex = (skillIndex % #SwordSkillsList) + 1
-        pcall(function()
-            Event:FireServer("Skills", { "UseSkill", currentSkill, { Direction = Vector3.new(0, 0, 0) } })
-            Event:FireServer(
-                "Combat",
-                { "\204", "\214", "\177", "\251" },
-                {
-                    "Attack",
-                    currentSkill,
-                    mobModel,
-                    genKey()
-                }
-            )
-        end)
+        for _, skillName in ipairs(SwordSkillsList) do
+            if isMobDead(mobModel) then break end
+            pcall(function()
+                Event:FireServer("Skills", { "UseSkill", skillName, { Direction = Vector3.new(0, 0, 0) } })
+                Event:FireServer(
+                    "Combat",
+                    { "\204", "\214", "\177", "\251" },
+                    {
+                        "Attack",
+                        skillName,
+                        mobModel,
+                        genKey()
+                    }
+                )
+            end)
+        end
         lastSkillTick = os.clock()
     end
 
-    -- 3. TouchInterest Instantâneo nas Lâminas (Dano de Contato Físico)
+    -- 3. TouchInterest Instantâneo nas Lâminas (Dano Físico Real Direto na Memória)
     if firetouchinterest and mobRoot then
         for _, blade in ipairs(myBlades) do
             if blade and blade.Parent then
@@ -289,19 +293,11 @@ local function executeApexAttack(targetMob)
         end
     end
 
-    -- 4. Clique 3D na tela se o mob estiver no campo de visão
-    local screenPos, onScreen = Camera:WorldToViewportPoint(mobRoot.Position)
-    if onScreen then
-        pcall(function()
-            VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
-            task.wait(0.005)
-            VIM:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
-        end)
-    end
+    -- ZERO VirtualInputManager! O cursor e a tela permanecem 100% livres!
 end
 
 -- ====================================================================
--- 📱 INTERFACE MOBILE HUD APEX V30 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
+-- 📱 INTERFACE MOBILE HUD APEX V31 (TOUCH & DESKTOP ULTRA-RESPONSIVO)
 -- ====================================================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "GhostHubApex"
@@ -350,7 +346,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "👻 GHOST APEX V30 • TRUE UNDERGROUND"
+Title.Text = "👻 GHOST APEX V31 • ZERO DAMAGE GOD"
 Title.TextColor3 = Color3.fromRGB(0, 255, 185)
 Title.Font = Enum.Font.GothamBlack
 Title.TextSize = 11
@@ -494,7 +490,6 @@ local function createToggle(name, initialVal, callback)
         debounce = false
     end
 
-    -- Escuta no botão e na linha inteira (facilita o toque com os dedos no Waydroid)
     btn.Activated:Connect(toggle)
     btn.MouseButton1Click:Connect(toggle)
     frame.Activated:Connect(toggle)
@@ -505,10 +500,11 @@ local function createToggle(name, initialVal, callback)
 end
 
 -- Toggles Solicitados
+createToggle("🛡️ ZERO DANO (SAFE OFFSET BLUU)", Settings.GodModeDistance, function(v) Settings.GodModeDistance = v end)
 createToggle("🕳️ MODO SUBTERRÂNEO (ABAIXO DO CHÃO)", Settings.Underground, function(v) Settings.Underground = v end)
 createToggle("👻 INVISIBILIDADE (AVATAR & ESPADAS)", Settings.Invisibility, function(v) Settings.Invisibility = v end)
 createToggle("💥 KILL AURA (MAPA INTEIRO)", Settings.KillAura, function(v) Settings.KillAura = v end)
-createToggle("🗡️ USAR SWORD SKILLS NATIVAS", Settings.SwordSkills, function(v) Settings.SwordSkills = v end)
+createToggle("🗡️ BURST DE SWORD SKILLS", Settings.SwordSkills, function(v) Settings.SwordSkills = v end)
 createToggle("🏃 ESTÂMINA INFINITA (100%)", Settings.InfStamina, function(v) Settings.InfStamina = v end)
 createToggle("🛡️ FARM APENAS SOZINHO (SOLO)", Settings.SoloOnly, function(v) Settings.SoloOnly = v end)
 createToggle("👻 NOCLIP (PAREDES/CHÃO)", Settings.NoClip, function(v) Settings.NoClip = v end)
@@ -519,7 +515,7 @@ local FloatBtn = Instance.new("TextButton", ScreenGui)
 FloatBtn.Size = UDim2.new(0, 115, 0, 36)
 FloatBtn.Position = UDim2.new(0.02, 0, 0.20, 0)
 FloatBtn.BackgroundColor3 = Color3.fromRGB(12, 15, 22)
-FloatBtn.Text = "👻 APEX V30"
+FloatBtn.Text = "👻 APEX V31"
 FloatBtn.TextColor3 = Color3.fromRGB(0, 255, 185)
 FloatBtn.Font = Enum.Font.GothamBlack
 FloatBtn.TextSize = 11
@@ -554,6 +550,21 @@ if Settings.AutoDungeon and Workspace:GetAttribute("DungeonFloor") then
         Event:FireServer("UniqueFloorTypes", { "Dungeons", "Start" })
     end)
 end
+
+-- Desync de Animação do Avatar (Estilo Bluu)
+local function applyDesync()
+    if Settings.Desync then
+        local char = LocalPlayer.Character
+        if char then
+            local animate = char:FindFirstChild("Animate")
+            if animate then
+                animate.Parent = nil
+            end
+        end
+    end
+end
+LocalPlayer.CharacterAdded:Connect(applyDesync)
+applyDesync()
 
 -- Invisibilidade Total (Avatar + Espadas no CharacterItems), NoClip & Estâmina no Stepped
 RunService.Stepped:Connect(function()
@@ -689,20 +700,31 @@ RunService.Heartbeat:Connect(function(dt)
         local tModel = currentTarget.Model
 
         -- 🕳️ CALCULA A SOLA DOS PÉS DO MOB VIA GetBoundingBox():
-        -- Garante que o boneco fique 100% DEBAIXO DA TERRA e NUNCA dentro do mob!
         local mobCFrame, mobSize = tModel:GetBoundingBox()
         local mobFloorY = mobCFrame.Position.Y - (mobSize.Y * 0.5)
-        local mobCenterX = mobCFrame.Position.X
-        local mobCenterZ = mobCFrame.Position.Z
+        local mobCenter = mobCFrame.Position
+        local mobLook = mobCFrame.LookVector
+        local flatLook = Vector3.new(mobLook.X, 0, mobLook.Z)
+        if flatLook.Magnitude > 0 then
+            flatLook = flatLook.Unit
+        else
+            flatLook = Vector3.new(0, 0, 1)
+        end
 
         local targetGoalPos
         if Settings.Underground then
-            -- Exatamente 5.2 studs abaixo dos pés do mob (completamente sob o solo!)
-            targetGoalPos = Vector3.new(mobCenterX, mobFloorY - Settings.FarmDepth, mobCenterZ)
+            if Settings.GodModeDistance then
+                -- 🛡️ POSICIONAMENTO ZERO DANO (Estilo Bluu / Offset Seguro):
+                -- 12 studs atrás das costas do mob E 5.5 studs debaixo da terra!
+                -- O mob desfere golpes para a frente (alcance de ~8 studs), errando 100% dos ataques!
+                targetGoalPos = Vector3.new(mobCenter.X, mobFloorY - Settings.FarmDepth, mobCenter.Z) - (flatLook * Settings.SafeBackDistance)
+            else
+                targetGoalPos = Vector3.new(mobCenter.X, mobFloorY - Settings.FarmDepth, mobCenter.Z)
+            end
         else
-            -- Modo aéreo: 4.2 studs acima da cabeça do mob
+            -- Modo aéreo: 5 studs acima da cabeça e recuado
             local mobTopY = mobCFrame.Position.Y + (mobSize.Y * 0.5)
-            targetGoalPos = Vector3.new(mobCenterX, mobTopY + Settings.FarmHeight, mobCenterZ)
+            targetGoalPos = Vector3.new(mobCenter.X, mobTopY + 5.0, mobCenter.Z) - (flatLook * 6.0)
         end
 
         local diff = targetGoalPos - myPos
@@ -713,13 +735,12 @@ RunService.Heartbeat:Connect(function(dt)
         local secs = elapsed % 60
 
         StatusText.Text = string.format(
-            "🎯 Alvo Menor Vida: %s (%s)\n📏 Dist: %.1f studs | ⏱️ %02d:%02d | ⚔️ Abatidos: %d\n🕳️ Posição: %s | 👥 Servidor: %s\n🗡️ Lâminas: %d | ⚡ Estâmina: 100%%",
+            "🎯 Alvo Menor Vida: %s (%s)\n📏 Dist: %.1f studs | ⏱️ %02d:%02d | ⚔️ Abatidos: %d\n🛡️ Modo: Zero Dano (-5.5y, -12 studs) | 👥 Servidor: %s\n🗡️ Lâminas: %d | ⚡ Estâmina: 100%%",
             currentTarget.Name,
             currentTarget.HPText,
             dist,
             mins, secs,
             Stats.MobsSlain,
-            Settings.Underground and string.format("Subterrâneo (-%.1f studs)", Settings.FarmDepth) or "Aéreo (+4 studs)",
             otherPlayers == 0 and "SOLO" or string.format("%d Players", otherPlayers + 1),
             #myBlades
         )
@@ -727,24 +748,24 @@ RunService.Heartbeat:Connect(function(dt)
         -- ⚡ DESLOCAMENTO CFrame ULTRA-RÁPIDO COM RESGATE DO VOID
         if dist > 50 then
             -- Teleporte instantâneo se estiver muito longe ou voltando do void
-            root.CFrame = CFrame.lookAt(targetGoalPos, mobCFrame.Position)
+            root.CFrame = CFrame.lookAt(targetGoalPos, mobCenter)
             root.AssemblyLinearVelocity = Vector3.zero
         elseif dist > 1.2 then
             local moveDir = diff.Unit
             local step = math.min(dist, Settings.FlySpeed * dt)
             local newPos = myPos + (moveDir * step)
 
-            root.CFrame = CFrame.lookAt(newPos, mobCFrame.Position)
+            root.CFrame = CFrame.lookAt(newPos, mobCenter)
             root.AssemblyLinearVelocity = Vector3.zero
         else
-            root.CFrame = CFrame.lookAt(targetGoalPos, mobCFrame.Position)
+            root.CFrame = CFrame.lookAt(targetGoalPos, mobCenter)
             root.AssemblyLinearVelocity = Vector3.zero
         end
 
         -- Câmera apontada para o mob
-        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, mobCFrame.Position)
+        Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, mobCenter)
 
-        -- 💥 ATAQUE SINCRONIZADO APEX (KILL AURA GLOBAL NO MAPA INTEIRO)
+        -- 💥 ATAQUE SINCRONIZADO APEX (KILL AURA GLOBAL NO MAPA INTEIRO - 100% CÓDIGO)
         if (now - lastAttackTick >= Settings.AttackCooldown) then
             if Settings.KillAura then
                 local multiCount = 0
@@ -776,10 +797,11 @@ RunService.Heartbeat:Connect(function(dt)
 end)
 
 print("═════════════════════════════════════════════════════════════")
-print("👻 [GHOST HUB V30 TRUE UNDERGROUND] CARREGADO COM SUCESSO!")
-print("   • Subterrâneo Perfeito: -5.2 studs abaixo da sola dos pés")
-print("   • Invisibilidade Total: Avatar + Espadas (CharacterItems)")
-print("   • Kill Aura Global: Ataca até 25 mobs simultâneos no mapa")
-print("   • Super Warp CFrame: 320 studs/s")
-print("   • Anti-Gravidade Absoluta: ATIVA")
+print("👻 [GHOST HUB V31 ZERO DAMAGE & PURE CODE] CARREGADO COM SUCESSO!")
+print("   • Zero Cliques de Mouse: 100% Código e Packet Direto")
+print("   • Modo Zero Dano: Offset Seguro 12 studs atrás & 5.5 studs subterrâneo")
+print("   • Desync de Animação Ativo (Animate.Parent = nil)")
+print("   • Burst Agressivo de Sword Skills (Estilo Oufguy)")
+print("   • Kill Aura Global: Até 30 alvos simultâneos")
+print("   • Invisibilidade Completa: Avatar + Espadas")
 print("═════════════════════════════════════════════════════════════")
